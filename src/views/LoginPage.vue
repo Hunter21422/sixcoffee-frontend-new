@@ -3,12 +3,13 @@
     <!-- КРАСИВЫЙ БЛОК ДЛЯ TELEGRAM MINI APP -->
     <div v-if="isTelegram" class="telegram-welcome">
       <div class="welcome-content">
-        <!-- Анимированная чашка кофе с серым паром -->
+        <!-- Реалистичная неподвижная чашка кофе с ручкой и серым паром -->
         <div class="coffee-cup">
           <div class="steam">
             <span></span><span></span><span></span><span></span><span></span>
           </div>
           <div class="cup">
+            <div class="handle"></div>
             <div class="coffee"></div>
           </div>
           <div class="saucer"></div>
@@ -37,9 +38,9 @@
         </div>
       </div>
 
-      <!-- Частицы на фоне -->
+      <!-- Лёгкие частицы на фоне -->
       <div class="particles">
-        <span v-for="n in 15" :key="n" :style="{ '--i': n }"></span>
+        <span v-for="n in 12" :key="n" :style="{ '--i': n }"></span>
       </div>
     </div>
 
@@ -302,25 +303,7 @@ onMounted(async () => {
   overflow: hidden;
 }
 
-.auth-container::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  right: -50%;
-  bottom: -50%;
-  background: 
-    radial-gradient(circle at 20% 80%, rgba(255,255,255,0.1) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(255,255,255,0.1) 0%, transparent 50%);
-  animation: float 20s infinite linear;
-}
-
-@keyframes float {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* === КРАСИВЫЙ TELEGRAM WELCOME SCREEN === */
+/* === TELEGRAM WELCOME SCREEN === */
 .telegram-welcome {
   min-height: 100vh;
   width: 100%;
@@ -342,82 +325,107 @@ onMounted(async () => {
   width: 100%;
 }
 
-/* Анимированная чашка кофе с СЕРЫМ паром */
+/* === НЕПОДВИЖНАЯ ЧАШКА КОФЕ С РУЧКОЙ И СЕРЫМ ПАРОМ === */
 .coffee-cup {
-  margin-bottom: 40px;
+  margin-bottom: 50px;
   position: relative;
-  animation: float 6s ease-in-out infinite;
+  width: 120px;
+  height: 120px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
+/* Чашка */
 .cup {
-  width: 100px;
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90px;
   height: 80px;
-  background: #fff;
-  border-radius: 0 0 50px 50px;
-  position: relative;
-  margin: 0 auto;
+  background: #ffffff;
+  border-radius: 0 0 45px 45px;
   overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.3);
 }
 
+/* Ручка чашки */
+.handle {
+  position: absolute;
+  right: -25px;
+  top: 20px;
+  width: 30px;
+  height: 50px;
+  border: 12px solid #ffffff;
+  border-left: none;
+  border-radius: 0 20px 20px 0;
+  box-shadow: 2px 2px 8px rgba(0,0,0,0.2);
+}
+
+/* Кофе внутри */
 .coffee {
+  position: absolute;
+  bottom: 0;
   width: 100%;
   height: 70%;
-  background: linear-gradient(#4a2c1a, #6b3f1e);
-  border-radius: 0 0 45px 45px;
+  background: linear-gradient(to top, #4a2c1a, #6b3f1e);
+  border-radius: 0 0 40px 40px;
   animation: wave 4s ease-in-out infinite;
 }
 
+/* Блюдце */
 .saucer {
-  width: 140px;
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 130px;
   height: 20px;
-  background: #fff;
+  background: #ffffff;
   border-radius: 50%;
-  margin: 10px auto 0;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
 }
 
-/* Серый пар — реалистичный дымок */
+/* Серый пар — реалистичный и плавный */
 .steam {
   position: absolute;
-  top: -30px;
+  top: 10px;
   left: 50%;
   transform: translateX(-50%);
 }
 
 .steam span {
-  display: block;
-  width: 10px;
-  height: 30px;
-  background: rgba(150, 150, 150, 0.6); /* Серый полупрозрачный пар */
-  border-radius: 50%;
   position: absolute;
   bottom: 0;
+  width: 10px;
+  height: 30px;
+  background: rgba(140, 140, 140, 0.6);
+  border-radius: 50%;
   animation: steam-rise 4s infinite ease-out;
-  filter: blur(2px);
+  filter: blur(3px);
 }
 
-.steam span:nth-child(1) { left: -25px; animation-delay: 0s; width: 8px; height: 25px; }
-.steam span:nth-child(2) { left: -12px; animation-delay: 0.8s; width: 12px; height: 35px; }
-.steam span:nth-child(3) { left: 0; animation-delay: 1.6s; width: 10px; height: 30px; }
-.steam span:nth-child(4) { left: 12px; animation-delay: 0.4s; width: 9px; height: 28px; }
-.steam span:nth-child(5) { left: 25px; animation-delay: 1.2s; width: 11px; height: 32px; }
+.steam span:nth-child(1) { left: -28px; animation-delay: 0s; width: 8px; height: 26px; }
+.steam span:nth-child(2) { left: -14px; animation-delay: 0.9s; width: 12px; height: 34px; }
+.steam span:nth-child(3) { left: 0; animation-delay: 1.8s; width: 10px; height: 30px; }
+.steam span:nth-child(4) { left: 14px; animation-delay: 0.6s; width: 9px; height: 28px; }
+.steam span:nth-child(5) { left: 28px; animation-delay: 1.3s; width: 11px; height: 32px; }
 
 @keyframes wave {
   0%, 100% { height: 70%; }
-  50% { height: 75%; }
+  50% { height: 74%; }
 }
 
 @keyframes steam-rise {
   0% {
-    transform: translateY(0) scale(0.6);
+    transform: translateY(0) scale(0.5);
     opacity: 0;
   }
   30% {
     opacity: 0.7;
   }
   100% {
-    transform: translateY(-100px) scale(1.2);
+    transform: translateY(-110px) scale(1.3);
     opacity: 0;
   }
 }
@@ -506,7 +514,7 @@ onMounted(async () => {
   opacity: 0.9;
 }
 
-/* Частицы */
+/* Частицы на фоне */
 .particles {
   position: absolute;
   inset: 0;
@@ -803,7 +811,6 @@ onMounted(async () => {
 
 /* === ИКОНКИ === */
 .icon-coffee::before { content: "☕"; }
-.icon-coffee-large::before { content: "☕"; }
 .icon-user::before { content: "👤"; }
 .icon-barista::before { content: "🎩"; }
 .icon-key::before { content: "🔑"; }
