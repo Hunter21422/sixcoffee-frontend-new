@@ -3,7 +3,7 @@
     <!-- КРАСИВЫЙ БЛОК ДЛЯ TELEGRAM MINI APP -->
     <div v-if="isTelegram" class="telegram-welcome">
       <div class="welcome-content">
-        <!-- Реалистичная неподвижная чашка кофе с ручкой и серым паром -->
+        <!-- Полностью неподвижная реалистичная чашка кофе с ручкой и серым паром -->
         <div class="coffee-cup">
           <div class="steam">
             <span></span><span></span><span></span><span></span><span></span>
@@ -44,7 +44,7 @@
       </div>
     </div>
 
-    <!-- ОБЫЧНАЯ ФОРМА ЛОГИНА (если НЕ в Telegram) -->
+    <!-- ОБЫЧНАЯ ФОРМА ЛОГИНА -->
     <div v-else class="auth-card glass-card">
       <div class="auth-header">
         <div class="logo">
@@ -55,83 +55,47 @@
         <p class="auth-subtitle">Выберите тип входа</p>
       </div>
 
-      <!-- Переключатель типа пользователя -->
       <div class="user-type-toggle">
-        <button
-          @click="setUserType('customer')"
-          :class="['toggle-btn', { active: userType === 'customer' }]"
-        >
-          <i class="icon-user"></i>
-          <span>Клиент</span>
+        <button @click="setUserType('customer')" :class="['toggle-btn', { active: userType === 'customer' }]">
+          <i class="icon-user"></i> <span>Клиент</span>
         </button>
-        <button
-          @click="setUserType('barista')"
-          :class="['toggle-btn', { active: userType === 'barista' }]"
-        >
-          <i class="icon-barista"></i>
-          <span>Бариста</span>
+        <button @click="setUserType('barista')" :class="['toggle-btn', { active: userType === 'barista' }]">
+          <i class="icon-barista"></i> <span>Бариста</span>
         </button>
       </div>
 
       <form @submit.prevent="submitLogin" class="auth-form">
-        <!-- Логин -->
         <div class="form-group">
           <label class="form-label">Логин</label>
           <div class="input-with-icon">
             <i class="icon-user"></i>
-            <input
-              v-model.trim="username"
-              placeholder="Введите логин"
-              required
-              class="form-input"
-              :disabled="loading"
-            />
+            <input v-model.trim="username" placeholder="Введите логин" required class="form-input" :disabled="loading" />
           </div>
         </div>
 
-        <!-- Пароль -->
         <div class="form-group">
           <label class="form-label">Пароль</label>
           <div class="input-with-icon">
             <i class="icon-lock"></i>
-            <input
-              v-model="password"
-              type="password"
-              placeholder="Введите пароль"
-              required
-              class="form-input"
-              :disabled="loading"
-            />
+            <input v-model="password" type="password" placeholder="Введите пароль" required class="form-input" :disabled="loading" />
           </div>
         </div>
 
-        <!-- Мастер-код для баристы -->
         <transition name="slide-fade">
           <div v-if="userType === 'barista'" class="form-group">
             <label class="form-label">Мастер-код сотрудника</label>
             <div class="input-with-icon">
               <i class="icon-key"></i>
-              <input
-                v-model.trim="employeeCode"
-                placeholder="Введите мастер-код"
-                required
-                class="form-input"
-                :disabled="loading"
-              />
+              <input v-model.trim="employeeCode" placeholder="Введите мастер-код" required class="form-input" :disabled="loading" />
             </div>
-            <p class="helper-text">
-              <i class="icon-info"></i>
-              Код выдаётся администратором кофейни
-            </p>
+            <p class="helper-text"><i class="icon-info"></i> Код выдаётся администратором кофейни</p>
           </div>
         </transition>
 
-        <!-- Кнопка входа -->
         <button type="submit" class="btn-primary btn-full" :disabled="loading">
           {{ loading ? (userType === 'customer' ? 'Входим…' : 'Входим в панель…') : buttonText }}
         </button>
 
-        <!-- Ошибка -->
         <transition name="fade">
           <div v-if="error" class="alert alert-error">
             <i class="icon-error"></i>
@@ -145,18 +109,13 @@
           </div>
         </transition>
 
-        <!-- Ссылки -->
         <div class="auth-footer">
           <span>Нет аккаунта?</span>
-          <router-link
-            :to="userType === 'customer' ? '/register' : '/register-barista'"
-            class="auth-link"
-          >
+          <router-link :to="userType === 'customer' ? '/register' : '/register-barista'" class="auth-link">
             {{ userType === 'customer' ? 'Зарегистрироваться' : 'Регистрация баристы' }}
           </router-link>
         </div>
 
-        <!-- Быстрое переключение -->
         <div class="quick-switch">
           <span v-if="userType === 'customer'">Вы сотрудник?</span>
           <span v-else>Вы клиент?</span>
@@ -178,10 +137,8 @@ import { useTelegram } from "@/composables/useTelegram";
 
 const router = useRouter();
 
-// Telegram
 const { isTelegram, tgUser } = useTelegram();
 
-// Обычный логин
 const userType = ref("customer");
 const username = ref("");
 const password = ref("");
@@ -217,10 +174,7 @@ async function submitLogin() {
     let response;
 
     if (userType.value === "customer") {
-      response = await loginJWT({
-        username: username.value,
-        password: password.value,
-      });
+      response = await loginJWT({ username: username.value, password: password.value });
       localStorage.setItem("user_type", "customer");
     } else {
       if (!employeeCode.value.trim()) {
@@ -239,9 +193,7 @@ async function submitLogin() {
     }
 
     localStorage.setItem("access", response.data.access);
-    if (response.data.refresh) {
-      localStorage.setItem("refresh", response.data.refresh);
-    }
+    if (response.data.refresh) localStorage.setItem("refresh", response.data.refresh);
 
     window.dispatchEvent(new CustomEvent("auth-changed"));
     await ensureUser();
@@ -271,9 +223,7 @@ async function submitLogin() {
 }
 
 onMounted(async () => {
-  if (!isTelegram.value) {
-    logout();
-  }
+  if (!isTelegram.value) logout();
 
   if (isTelegram.value) {
     loading.value = true;
@@ -325,14 +275,15 @@ onMounted(async () => {
   width: 100%;
 }
 
-/* === НЕПОДВИЖНАЯ ЧАШКА КОФЕ С РУЧКОЙ И СЕРЫМ ПАРОМ === */
+/* === ПОЛНОСТЬЮ НЕПОДВИЖНАЯ ЧАШКА КОФЕ С РУЧКОЙ И СЕРЫМ ПАРОМ === */
 .coffee-cup {
   margin-bottom: 50px;
   position: relative;
-  width: 120px;
-  height: 120px;
+  width: 130px;
+  height: 130px;
   margin-left: auto;
   margin-right: auto;
+  /* Никаких анимаций вращения или движения — чашка стоит как вкопанная */
 }
 
 /* Чашка */
