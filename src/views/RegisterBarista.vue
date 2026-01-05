@@ -1,5 +1,5 @@
 <template>
-  <div class="auth-container">
+  <div class="auth-container" :class="{ 'tg-mode': isTelegram }">
     <div class="auth-card glass-card">
       <div class="auth-header">
         <div class="logo">
@@ -82,7 +82,6 @@
             Зарегистрироваться как клиент
           </router-link>
         </div>
-
         <div class="auth-footer">
           <span>Уже есть аккаунт?</span>
           <router-link to="/login" class="auth-link">
@@ -98,8 +97,10 @@
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { registerBarista } from "@/api";
+import { useTelegram } from "@/composables/useTelegram";
 
 const router = useRouter();
+const { isTelegram } = useTelegram();
 
 const username = ref("");
 const password = ref("");
@@ -126,6 +127,9 @@ async function submitRegister() {
       localStorage.setItem("refresh", data.refresh);
     }
 
+    // Устанавливаем роль баристы
+    localStorage.setItem("user_type", "barista");
+
     // Успешно — сразу в панель баристы
     await router.push("/barista");
   } catch (e) {
@@ -141,7 +145,7 @@ async function submitRegister() {
 </script>
 
 <style scoped>
-/* Основной фон с анимацией */
+/* === ОСНОВНОЙ КОНТЕЙНЕР === */
 .auth-container {
   min-height: 100vh;
   display: flex;
@@ -152,8 +156,15 @@ async function submitRegister() {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   position: relative;
   overflow: hidden;
+  transition: background 0.3s ease;
 }
 
+/* В Telegram — фон по теме Telegram */
+.auth-container.tg-mode {
+  background: var(--tg-theme-bg-color, #ffffff);
+}
+
+/* Анимированный фон только в браузере */
 .auth-container::before {
   content: '';
   position: absolute;
@@ -161,10 +172,16 @@ async function submitRegister() {
   left: -50%;
   right: -50%;
   bottom: -50%;
-  background: 
+  background:
     radial-gradient(circle at 20% 80%, rgba(255,255,255,0.1) 0%, transparent 50%),
     radial-gradient(circle at 80% 20%, rgba(255,255,255,0.1) 0%, transparent 50%);
   animation: float 20s infinite linear;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+.auth-container.tg-mode::before {
+  opacity: 0;
 }
 
 @keyframes float {
@@ -183,6 +200,12 @@ async function submitRegister() {
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
   z-index: 1;
   border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: background 0.3s ease;
+}
+
+.auth-container.tg-mode .auth-card {
+  background: var(--tg-theme-secondary-bg-color, rgba(255, 255, 255, 0.9));
+  color: var(--tg-theme-text-color, #000000);
 }
 
 /* Заголовок */
@@ -367,25 +390,32 @@ async function submitRegister() {
 .icon-register::before { content: "📝"; }
 .icon-error::before { content: "❌"; }
 
-/* Темная тема */
-@media (prefers-color-scheme: dark) {
+/* Тёмная тема + Telegram адаптация */
+@media (prefers-color-scheme: dark),
+.auth-container.tg-mode {
   .auth-card {
     background: rgba(17, 24, 39, 0.95);
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
-  
+
   .auth-title { color: #f1f5f9; }
   .auth-subtitle { color: #94a3b8; }
-  
+
   .form-input {
     background: rgba(30, 41, 59, 0.9);
     border-color: #475569;
     color: #f1f5f9;
   }
-  
+
   .form-input:focus { background: rgba(30, 41, 59, 1); }
-  
+
   .auth-footer { border-color: #475569; color: #94a3b8; }
+
+  .alert-error {
+    background: rgba(127, 29, 29, 0.3);
+    border-color: #7f1d1d;
+    color: #fca5a5;
+  }
 }
 
 /* Адаптивность */
