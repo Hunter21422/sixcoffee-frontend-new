@@ -1,5 +1,5 @@
 <template>
-  <div class="verify-reward-card">
+  <div class="verify-reward-card" :class="{ 'tg-mode': isTelegram }">
     <!-- Заголовок -->
     <div class="card-header">
       <div class="header-icon">
@@ -9,7 +9,7 @@
       </div>
       <div class="header-content">
         <h3 class="card-title">Проверка кода лояльности</h3>
-        <p class="card-subtitle">Введите 6-значный код для проверки</p>
+        <p class="card-subtitle">Введите 6-значный код клиента</p>
       </div>
     </div>
 
@@ -30,9 +30,9 @@
             inputmode="numeric"
             maxlength="1"
             class="otp-digit"
-            :class="{ 
+            :class="{
               'filled': digits[index - 1],
-              'active': focusedIndex === index 
+              'active': focusedIndex === index
             }"
             @input="handleInput(index, $event)"
             @keydown="handleKeydown(index, $event)"
@@ -49,7 +49,7 @@
       </div>
 
       <!-- Кнопка проверки -->
-      <button 
+      <button
         class="activate-btn"
         :disabled="loading || code.length < 6"
         @click="verify"
@@ -89,15 +89,18 @@
           <span class="example-digit">5</span>
           <span class="example-digit">6</span>
         </div>
-        <p class="example-note">Код генерируется в мобильном приложении клиента</p>
+        <p class="example-note">Код генерируется в приложении клиента</p>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, nextTick } from "vue";
 import api from "@/api";
+import { useTelegram } from "@/composables/useTelegram";
+
+const { isTelegram } = useTelegram();
 
 const digits = ref(["", "", "", "", "", ""]);
 const focusedIndex = ref(1);
@@ -107,14 +110,13 @@ const status = ref("");
 const loading = ref(false);
 const animation = ref(false);
 
-// Полный код из всех полей
 const code = computed(() => digits.value.join(""));
 
 // Обработка ввода цифры
 function handleInput(index, event) {
   let value = event.target.value;
 
-  // Разрешаем только цифры
+  // Только цифры
   if (!/^\d?$/.test(value)) {
     digits.value[index - 1] = "";
     return;
@@ -124,14 +126,24 @@ function handleInput(index, event) {
 
   // Автофокус на следующий
   if (value && index < 6) {
-    otpInputs.value[index].focus();
+    nextTick(() => {
+      otpInputs.value[index]?.focus();
+    });
   }
 }
 
-// Обработка Backspace
+// Обработка Backspace и стрелок
 function handleKeydown(index, event) {
   if (event.key === "Backspace" && !digits.value[index - 1] && index > 1) {
+    nextTick(() => {
+      otpInputs.value[index - 2].focus();
+    });
+  } else if (event.key === "ArrowLeft" && index > 1) {
+    event.preventDefault();
     otpInputs.value[index - 2].focus();
+  } else if (event.key === "ArrowRight" && index < 6) {
+    event.preventDefault();
+    otpInputs.value[index].focus();
   }
 }
 
@@ -144,7 +156,9 @@ function handlePaste(event) {
       digits.value[i] = paste[i] || "";
     }
     const nextFocus = Math.min(paste.length, 6);
-    otpInputs.value[nextFocus - 1]?.focus();
+    nextTick(() => {
+      otpInputs.value[nextFocus - 1]?.focus();
+    });
   }
 }
 
@@ -158,23 +172,23 @@ async function verify() {
   status.value = "";
 
   try {
-    await api.post("loyalty/check-code/", { code: code.value });
+    const res = await api.post("loyalty/check-code/", { code: code.value });
 
-    message.value = "Код действителен!";
+    // Успех — начисление штампа
+    message.value = res.data?.detail || "Штамп успешно начислен!";
     status.value = "success";
 
     setTimeout(() => {
       digits.value = ["", "", "", "", "", ""];
       otpInputs.value[0]?.focus();
       animation.value = false;
-    }, 1500);
+    }, 2000);
   } catch (e) {
     animation.value = false;
-
     const detail = e?.response?.data?.detail || "";
 
     if (e.response?.status === 404) {
-      message.value = "Такого кода не существует";
+      message.value = "Код не найден";
     } else if (detail.includes("использован")) {
       message.value = "Код уже был использован";
     } else if (detail.includes("истёк")) {
@@ -182,7 +196,6 @@ async function verify() {
     } else {
       message.value = "Код недействителен";
     }
-
     status.value = "error";
   } finally {
     loading.value = false;
@@ -192,25 +205,27 @@ async function verify() {
 
 <style scoped>
 .verify-reward-card {
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--tg-theme-secondary-bg-color, rgba(255, 255, 255, 0.95));
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 24px;
-  padding: 32px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--tg-theme-hint-color, rgba(255, 255, 255, 0.2));
+  border-radius: 28px;
+  padding: 40px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
+  max-width: 520px;
+  margin: 0 auto;
 }
 
 .verify-reward-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.12);
+  transform: translateY(-6px);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.15);
 }
 
 .card-header {
   display: flex;
   align-items: center;
-  gap: 20px;
-  margin-bottom: 32px;
+  gap: 24px;
+  margin-bottom: 40px;
 }
 
 .header-icon {
@@ -218,113 +233,112 @@ async function verify() {
 }
 
 .icon-circle {
-  width: 64px;
-  height: 64px;
+  width: 80px;
+  height: 80px;
   background: linear-gradient(135deg, #4f46e5, #7c3aed);
-  border-radius: 20px;
+  border-radius: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 24px;
-  box-shadow: 0 8px 24px rgba(79, 70, 229, 0.3);
+  font-size: 36px;
+  box-shadow: 0 12px 32px rgba(79, 70, 229, 0.4);
 }
 
 .icon-circle-animate {
-  animation: iconPulse 1.5s infinite;
+  animation: iconPulse 1.8s infinite;
 }
 
 @keyframes iconPulse {
   0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.1); }
+  50% { transform: scale(1.12); }
 }
 
 .card-title {
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--tg-theme-text-color, #1f2937);
   margin: 0 0 8px;
 }
 
 .card-subtitle {
-  font-size: 14px;
-  color: #6b7280;
+  font-size: 16px;
+  color: var(--tg-theme-hint-color, #6b7280);
   margin: 0;
 }
 
 .code-input-section {
-  margin-bottom: 32px;
+  margin-bottom: 40px;
 }
 
 .input-label {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 14px;
+  gap: 12px;
+  font-size: 16px;
   font-weight: 600;
-  color: #4f46e5;
-  margin-bottom: 16px;
+  color: var(--tg-theme-link-color, #4f46e5);
+  margin-bottom: 20px;
 }
 
-/* Новые 6 боксов для цифр */
 .otp-boxes {
   display: flex;
   justify-content: center;
-  gap: 12px;
-  margin: 20px 0;
+  gap: 16px;
+  margin: 24px 0;
 }
 
 .otp-digit {
-  width: 60px;
-  height: 60px;
-  background: white;
-  border: 3px dashed #e5e7eb;
-  border-radius: 16px;
-  font-size: 32px;
-  font-weight: 700;
+  width: 64px;
+  height: 64px;
+  background: var(--tg-theme-bg-color, white);
+  border: 3px dashed var(--tg-theme-hint-color, #e5e7eb);
+  border-radius: 20px;
+  font-size: 36px;
+  font-weight: 800;
   text-align: center;
-  color: #1f2937;
+  color: var(--tg-theme-text-color, #1f2937);
   transition: all 0.3s ease;
   outline: none;
 }
 
 .otp-digit.filled {
   border-style: solid;
-  border-color: #4f46e5;
-  background: rgba(99, 102, 241, 0.1);
+  border-color: var(--tg-theme-button-color, #4f46e5);
+  background: rgba(79, 70, 229, 0.1);
 }
 
 .otp-digit.active {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 6px rgba(99, 102, 241, 0.2);
+  border-color: var(--tg-theme-button-color, #6366f1);
+  box-shadow: 0 0 0 8px rgba(99, 102, 241, 0.2);
   animation: pulse 1.5s infinite;
 }
 
 @keyframes pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
-  50% { box-shadow: 0 0 0 12px rgba(99, 102, 241, 0); }
+  50% { box-shadow: 0 0 0 16px rgba(99, 102, 241, 0); }
 }
 
 .code-hint {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: #6b7280;
-  margin-top: 12px;
   justify-content: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--tg-theme-hint-color, #6b7280);
+  margin-top: 16px;
 }
 
-/* Кнопка и остальное — без изменений */
+/* Кнопка проверки */
 .activate-btn {
   position: relative;
   width: 100%;
-  max-width: 400px;
-  margin: 32px auto;
-  padding: 20px 32px;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  max-width: 420px;
+  margin: 40px auto;
+  padding: 22px;
+  background: linear-gradient(135deg, var(--tg-theme-button-color, #6366f1), #8b5cf6);
   border: none;
-  border-radius: 16px;
+  border-radius: 20px;
   color: white;
   font-size: 18px;
   font-weight: 700;
@@ -336,7 +350,7 @@ async function verify() {
 
 .activate-btn:hover:not(:disabled) {
   transform: translateY(-4px);
-  box-shadow: 0 12px 28px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 16px 40px rgba(99, 102, 241, 0.4);
 }
 
 .activate-btn:disabled {
@@ -348,7 +362,7 @@ async function verify() {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 14px;
   position: relative;
   z-index: 1;
 }
@@ -361,99 +375,136 @@ async function verify() {
   height: 200%;
   background: linear-gradient(to right, transparent 0%, rgba(255, 255, 255, 0.3) 50%, transparent 100%);
   transform: rotate(30deg);
-  transition: transform 0.6s ease;
+  transition: transform 0.8s ease;
 }
 
 .activate-btn:hover .btn-shine {
   transform: rotate(30deg) translateX(100%);
 }
 
+/* Результат */
 .result-message {
-  padding: 20px;
-  border-radius: 16px;
+  padding: 24px;
+  border-radius: 20px;
   display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  margin: 24px 0;
-  text-align: center;
+  align-items: center;
+  gap: 20px;
+  margin: 32px 0;
+  text-align: left;
+  animation: message-slide 0.5s ease-out;
 }
 
 .result-message.success {
-  background: rgba(16, 185, 129, 0.1);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  color: #86efac;
+  background: rgba(16, 185, 129, 0.15);
+  border: 2px solid rgba(16, 185, 129, 0.4);
+  color: var(--tg-theme-text-color, #166534);
 }
 
 .result-message.error {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.15);
+  border: 2px solid rgba(239, 68, 68, 0.4);
+  color: var(--tg-theme-text-color, #991b1b);
 }
 
 .message-icon i {
-  font-size: 24px;
-  margin-top: 2px;
+  font-size: 32px;
 }
 
 .result-message.success .message-icon i { color: #10b981; }
 .result-message.error .message-icon i { color: #ef4444; }
 
 .message-text {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
   margin: 0;
-  width: 100%;
 }
 
+@keyframes message-slide {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Пример кода */
 .example-section {
-  background: rgba(249, 250, 251, 0.8);
-  border-radius: 16px;
-  padding: 20px;
-  margin-top: 32px;
+  background: var(--tg-theme-secondary-bg-color, rgba(249, 250, 251, 0.8));
+  border-radius: 20px;
+  padding: 24px;
+  margin-top: 40px;
 }
 
 .example-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 16px;
-  color: #4f46e5;
+  gap: 12px;
+  margin-bottom: 20px;
+  color: var(--tg-theme-link-color, #4f46e5);
   font-weight: 600;
+  font-size: 16px;
 }
 
 .example-code {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   justify-content: center;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .example-digit {
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   background: white;
-  border: 2px solid #4f46e5;
-  border-radius: 10px;
+  border: 3px solid var(--tg-theme-button-color, #4f46e5);
+  border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
-  color: #4f46e5;
-  font-size: 18px;
+  font-weight: 800;
+  color: var(--tg-theme-button-color, #4f46e5);
+  font-size: 24px;
 }
 
 .example-note {
-  font-size: 13px;
-  color: #6b7280;
+  font-size: 14px;
+  color: var(--tg-theme-hint-color, #6b7280);
   text-align: center;
   margin: 0;
 }
 
 /* Адаптивность */
 @media (max-width: 640px) {
-  .verify-reward-card { padding: 24px; }
-  .card-header { flex-direction: column; text-align: center; gap: 16px; }
-  .otp-boxes { gap: 8px; }
-  .otp-digit { width: 50px; height: 50px; font-size: 28px; }
+  .verify-reward-card {
+    padding: 32px 20px;
+    margin: 0 16px;
+  }
+  .card-header {
+    flex-direction: column;
+    text-align: center;
+    gap: 20px;
+  }
+  .otp-boxes {
+    gap: 10px;
+  }
+  .otp-digit {
+    width: 54px;
+    height: 54px;
+    font-size: 30px;
+  }
+  .activate-btn {
+    padding: 18px;
+    font-size: 17px;
+  }
+  .result-message {
+    flex-direction: column;
+    text-align: center;
+  }
+  .message-text {
+    font-size: 18px;
+  }
 }
 </style>
