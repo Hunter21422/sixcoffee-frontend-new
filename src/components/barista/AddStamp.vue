@@ -1,20 +1,20 @@
 <template>
-  <div class="stamp-card glass-card">
+  <div class="stamp-card glass-card" :class="{ 'tg-mode': isTelegram }">
     <div class="card-header">
       <h3 class="card-title">
         <i class="icon-stamp"></i>
-        Начислить штамп пользователю
+        Начислить штамп по Telegram
       </h3>
-      <div class="card-subtitle">Ручное добавление штампов лояльности</div>
+      <div class="card-subtitle">Ручное добавление штампов по @username</div>
     </div>
 
     <div class="form-group">
       <div class="input-group">
         <div class="input-with-icon">
-          <i class="icon-user"></i>
+          <i class="icon-telegram"></i>
           <input
-            v-model.trim="username"
-            placeholder="Имя пользователя (логин)"
+            v-model.trim="telegramUsername"
+            placeholder="@username из Telegram"
             @blur="loadStatus"
             @keyup.enter="loadStatus"
             class="form-input"
@@ -30,15 +30,15 @@
             type="number"
             min="1"
             :max="availableStamps"
-            :disabled="loading || stamps === null || atLimit"
+            :disabled="loading || userStamps === null || atLimit"
             class="form-input number-input"
             placeholder="Кол-во"
           />
         </div>
 
-        <button 
+        <button
           class="btn-primary btn-lg btn-with-icon"
-          :disabled="loading || !canSubmit || atLimit || stamps === null"
+          :disabled="loading || !canSubmit || atLimit || userStamps === null"
           @click="submit"
         >
           <i class="icon-add"></i>
@@ -48,32 +48,33 @@
     </div>
 
     <!-- Прогресс бар -->
-    <div v-if="stamps !== null && maxStamps !== null" class="progress-section">
-      <div class="progress-header">
-        <span class="progress-label">Прогресс лояльности</span>
-        <span class="progress-count">{{ stamps }} / {{ maxStamps }}</span>
+    <transition name="fade">
+      <div v-if="userStamps !== null && maxStamps !== null" class="progress-section">
+        <div class="progress-header">
+          <span class="progress-label">Прогресс лояльности</span>
+          <span class="progress-count">{{ userStamps }} / {{ maxStamps }}</span>
+        </div>
+        <div class="progress-bar">
+          <div
+            class="progress-fill"
+            :style="{ width: `${progress}%` }"
+            :class="{ 'progress-complete': atLimit }"
+          ></div>
+        </div>
+        <div class="progress-dots">
+          <span
+            v-for="n in maxStamps"
+            :key="n"
+            :class="['progress-dot', { 'filled': n <= userStamps }]"
+          >
+            {{ n }}
+          </span>
+        </div>
+        <div class="progress-note" v-if="atLimit">
+          🎉 Лимит достигнут — положен бесплатный напиток!
+        </div>
       </div>
-      <div class="progress-bar">
-        <div 
-          class="progress-fill" 
-          :style="{ width: `${progress}%` }"
-          :class="{ 'progress-complete': atLimit }"
-        ></div>
-      </div>
-      <div class="progress-dots">
-        <span 
-          v-for="n in maxStamps" 
-          :key="n"
-          :class="['progress-dot', { 'filled': n <= stamps }]"
-        >
-          {{ n }}
-        </span>
-      </div>
-
-      <div class="progress-note" v-if="atLimit">
-        🎉 Лимит достигнут — положен бесплатный напиток!
-      </div>
-    </div>
+    </transition>
 
     <!-- Сообщение -->
     <transition name="fade">
@@ -85,50 +86,45 @@
 
     <div class="hint">
       <i class="icon-info"></i>
-      Введите логин пользователя и нажмите Enter или кликните вне поля для проверки статуса.
+      Клиент говорит свой @username из Telegram — введите его и нажмите Enter.
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, watch } from "vue";
-import { getLoyaltyStatus, addStampToUser } from "@/api";
+import { getLoyaltyStatusByTelegram, addStampByTelegram } from "@/api";
+import { useTelegram } from "@/composables/useTelegram";
 
-const username = ref("");
+const { isTelegram } = useTelegram();
+
+const telegramUsername = ref("");
 const amount = ref(1);
 const loading = ref(false);
 const msg = ref("");
 const status = ref("");
-const stamps = ref(null);
-const maxStamps = ref(null);
+const userStamps = ref(null);
+const maxStamps = ref(6); // можно получать с бэкенда, если меняется
 
-const canSubmit = computed(() => 
-  !!username.value.trim() && 
-  Number(amount.value) > 0 && 
-  stamps !== null && 
+const canSubmit = computed(() =>
+  !!telegramUsername.value.trim() &&
+  telegramUsername.value.startsWith("@") &&
+  Number(amount.value) > 0 &&
+  userStamps.value !== null &&
   !atLimit.value
 );
 
-const atLimit = computed(() => 
-  stamps.value !== null && 
-  maxStamps.value !== null && 
-  stamps.value >= maxStamps.value
-);
-
-const availableStamps = computed(() => 
-  atLimit.value ? 0 : (maxStamps.value - stamps.value)
-);
-
+const atLimit = computed(() => userStamps.value >= maxStamps.value);
+const availableStamps = computed(() => atLimit.value ? 0 : (maxStamps.value - userStamps.value));
 const progress = computed(() => {
-  if (stamps.value === null || maxStamps.value === null) return 0;
-  return Math.min(100, (stamps.value / maxStamps.value) * 100);
+  if (userStamps.value === null) return 0;
+  return Math.min(100, (userStamps.value / maxStamps.value) * 100);
 });
 
 async function loadStatus() {
-  const name = username.value.trim();
-  if (!name) {
-    stamps.value = null;
-    maxStamps.value = null;
+  const name = telegramUsername.value.trim();
+  if (!name || !name.startsWith("@")) {
+    userStamps.value = null;
     msg.value = "";
     status.value = "";
     amount.value = 1;
@@ -136,31 +132,30 @@ async function loadStatus() {
   }
 
   loading.value = true;
-  msg.value = "Проверяем статус...";
+  msg.value = "Ищем пользователя...";
   status.value = "info";
 
   try {
-    const { data } = await getLoyaltyStatus(name);
-    stamps.value = Number(data.stamps ?? 0);
+    const { data } = await getLoyaltyStatusByTelegram(name.slice(1)); // без @
+    userStamps.value = Number(data.stamps ?? 0);
     maxStamps.value = Number(data.max_stamps ?? 6);
 
     if (atLimit.value) {
-      msg.value = "🎉 Пользователь достиг лимита! Положен бесплатный напиток.";
+      msg.value = `🎉 @${name.slice(1)} достиг лимита! Положен бесплатный напиток.`;
       status.value = "success";
     } else {
-      msg.value = `Текущий прогресс: ${stamps.value}/${maxStamps.value}`;
+      msg.value = `Найден: @${name.slice(1)} — ${userStamps.value}/${maxStamps.value} штампов`;
       status.value = "info";
     }
   } catch (e) {
     if (e.response?.status === 404) {
-      msg.value = "Пользователь с таким логином не найден";
+      msg.value = "Пользователь с таким @username не найден";
       status.value = "warning";
     } else {
-      msg.value = "Ошибка сервера. Попробуйте позже.";
+      msg.value = "Ошибка связи с сервером";
       status.value = "error";
     }
-    stamps.value = null;
-    maxStamps.value = null;
+    userStamps.value = null;
   } finally {
     loading.value = false;
   }
@@ -174,39 +169,35 @@ async function submit() {
   status.value = "info";
 
   try {
-    const { data } = await addStampToUser({
-      username: username.value.trim(),
+    const { data } = await addStampByTelegram({
+      telegram_username: telegramUsername.value.trim().slice(1),
       amount: Number(amount.value || 1),
     });
 
-    // Обновляем локальные данные — точно знаем, сколько добавлено
     const added = Number(data.stamps_added || amount.value);
-    stamps.value = Number(data.stamps_total ?? data.stamps ?? (stamps.value + added));
-    maxStamps.value = Number(data.max_stamps ?? maxStamps.value);
+    userStamps.value = Number(data.stamps_total ?? data.stamps ?? (userStamps.value + added));
 
-    msg.value = `✅ Добавлено ${added} штамп(ов)! Теперь: ${stamps.value}/${maxStamps.value}`;
+    msg.value = `✅ Добавлено ${added} штамп(ов) пользователю ${telegramUsername.value}! Теперь: ${userStamps.value}/${maxStamps.value}`;
     status.value = "success";
 
     if (atLimit.value) {
-      msg.value += " 🎉 Лимит достигнут — положен бесплатный напиток!";
+      msg.value += " 🎉 Лимит достигнут — выдайте бесплатный напиток!";
     }
 
-    // Сбрасываем количество
     amount.value = 1;
   } catch (e) {
-    msg.value = e?.response?.data?.detail || e?.response?.data?.error || "Ошибка начисления штампа";
+    msg.value = e?.response?.data?.detail || "Ошибка начисления штампа";
     status.value = "error";
-    await loadStatus(); // перезагружаем статус
+    await loadStatus(); // обновляем статус
   } finally {
     loading.value = false;
   }
 }
 
 // Очистка при пустом поле
-watch(username, (newVal) => {
+watch(telegramUsername, (newVal) => {
   if (!newVal.trim()) {
-    stamps.value = null;
-    maxStamps.value = null;
+    userStamps.value = null;
     msg.value = "";
     status.value = "";
     amount.value = 1;
@@ -216,49 +207,50 @@ watch(username, (newVal) => {
 
 <style scoped>
 .stamp-card {
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--tg-theme-secondary-bg-color, rgba(255, 255, 255, 0.95));
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(229, 231, 235, 0.8);
-  border-radius: 20px;
-  padding: 28px;
-  margin-bottom: 24px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--tg-theme-hint-color, rgba(229, 231, 235, 0.8));
+  border-radius: 28px;
+  padding: 40px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
+  max-width: 600px;
+  margin: 0 auto;
 }
 
 .stamp-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  transform: translateY(-6px);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.15);
 }
 
 .card-header {
-  margin-bottom: 24px;
+  margin-bottom: 32px;
   text-align: center;
 }
 
 .card-title {
-  font-size: 22px;
+  font-size: 28px;
   font-weight: 700;
-  color: #1f2937;
-  margin: 0 0 8px;
+  color: var(--tg-theme-text-color, #1f2937);
+  margin: 0 0 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 16px;
 }
 
 .card-subtitle {
-  font-size: 14px;
-  color: #6b7280;
+  font-size: 16px;
+  color: var(--tg-theme-hint-color, #6b7280);
 }
 
 .form-group {
-  margin-bottom: 24px;
+  margin-bottom: 32px;
 }
 
 .input-group {
   display: grid;
-  grid-template-columns: 1fr 140px 200px;
+  grid-template-columns: 1fr 140px auto;
   gap: 16px;
   align-items: end;
 }
@@ -272,26 +264,26 @@ watch(username, (newVal) => {
   left: 16px;
   top: 50%;
   transform: translateY(-50%);
-  color: #9ca3af;
-  font-size: 20px;
+  color: var(--tg-theme-hint-color, #9ca3af);
+  font-size: 22px;
   pointer-events: none;
 }
 
 .form-input {
   width: 100%;
-  padding: 16px 16px 16px 52px;
-  background: white;
-  border: 2px solid #e5e7eb;
-  border-radius: 12px;
-  font-size: 16px;
-  color: #1f2937;
+  padding: 18px 18px 18px 56px;
+  background: var(--tg-theme-bg-color, white);
+  border: 2px solid var(--tg-theme-hint-color, #e5e7eb);
+  border-radius: 16px;
+  font-size: 17px;
+  color: var(--tg-theme-text-color, #1f2937);
   transition: all 0.3s ease;
 }
 
 .form-input:focus {
   outline: none;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+  border-color: var(--tg-theme-button-color, #6366f1);
+  box-shadow: 0 0 0 6px rgba(99, 102, 241, 0.2);
 }
 
 .number-input {
@@ -300,40 +292,41 @@ watch(username, (newVal) => {
 }
 
 .btn-primary {
-  padding: 16px 24px;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  padding: 18px 32px;
+  background: linear-gradient(135deg, var(--tg-theme-button-color, #6366f1), #8b5cf6);
   color: white;
-  font-weight: 600;
+  font-weight: 700;
   border: none;
-  border-radius: 12px;
+  border-radius: 16px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
   transition: all 0.3s ease;
+  font-size: 17px;
 }
 
 .btn-primary:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(99, 102, 241, 0.4);
 }
 
 .btn-primary:disabled {
-  opacity: 0.6;
+  opacity: 0.7;
   cursor: not-allowed;
 }
 
 .btn-lg {
-  padding: 16px 32px;
+  padding: 18px 32px;
 }
 
 /* Прогресс */
 .progress-section {
-  margin: 32px 0;
-  padding: 24px;
-  background: rgba(249, 250, 251, 0.8);
-  border-radius: 16px;
+  margin: 40px 0;
+  padding: 32px;
+  background: var(--tg-theme-secondary-bg-color, rgba(249, 250, 251, 0.8));
+  border-radius: 20px;
   text-align: center;
 }
 
@@ -341,34 +334,34 @@ watch(username, (newVal) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-  font-size: 14px;
+  margin-bottom: 20px;
+  font-size: 16px;
 }
 
 .progress-label {
   font-weight: 600;
-  color: #4b5563;
+  color: var(--tg-theme-text-color, #4b5563);
 }
 
 .progress-count {
   font-weight: 700;
-  font-size: 18px;
-  color: #6366f1;
+  font-size: 24px;
+  color: var(--tg-theme-button-color, #6366f1);
 }
 
 .progress-bar {
-  height: 12px;
-  background: #e5e7eb;
-  border-radius: 6px;
+  height: 16px;
+  background: var(--tg-theme-hint-color, #e5e7eb);
+  border-radius: 8px;
   overflow: hidden;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .progress-fill {
   height: 100%;
   background: linear-gradient(90deg, #6366f1, #8b5cf6);
-  border-radius: 6px;
-  transition: width 0.6s ease;
+  border-radius: 8px;
+  transition: width 0.8s ease;
 }
 
 .progress-complete {
@@ -378,109 +371,123 @@ watch(username, (newVal) => {
 .progress-dots {
   display: flex;
   justify-content: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 16px;
+  margin-bottom: 20px;
 }
 
 .progress-dot {
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
-  background: #f3f4f6;
-  border: 3px solid #e5e7eb;
+  background: var(--tg-theme-bg-color, #f3f4f6);
+  border: 4px solid var(--tg-theme-hint-color, #e5e7eb);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 600;
-  color: #9ca3af;
-  transition: all 0.3s ease;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--tg-theme-hint-color, #9ca3af);
+  transition: all 0.4s ease;
 }
 
 .progress-dot.filled {
   background: #6366f1;
   border-color: #6366f1;
   color: white;
-  transform: scale(1.15);
+  transform: scale(1.2);
 }
 
 .progress-note {
-  margin-top: 16px;
-  font-size: 16px;
-  font-weight: 600;
+  margin-top: 20px;
+  font-size: 18px;
+  font-weight: 700;
   color: #10b981;
 }
 
 /* Алерт */
 .alert {
-  padding: 16px 20px;
-  border-radius: 12px;
-  margin: 20px 0;
+  padding: 20px;
+  border-radius: 16px;
+  margin: 24px 0;
   display: flex;
   align-items: center;
-  gap: 12px;
-  animation: slideIn 0.3s ease;
+  gap: 16px;
+  font-size: 16px;
+  font-weight: 600;
+  animation: slideIn 0.4s ease;
 }
 
 .alert-success {
-  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
-  border: 1px solid #10b981;
-  color: #065f46;
+  background: rgba(16, 185, 129, 0.15);
+  border: 2px solid #10b981;
+  color: #166534;
 }
 
 .alert-error {
-  background: linear-gradient(135deg, #fee2e2, #fecaca);
-  border: 1px solid #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+  border: 2px solid #ef4444;
   color: #991b1b;
 }
 
 .alert-info {
-  background: linear-gradient(135deg, #e0f2fe, #bae6fd);
-  border: 1px solid #0ea5e9;
+  background: rgba(14, 165, 233, 0.15);
+  border: 2px solid #0ea5e9;
   color: #0c4a6e;
 }
 
 .hint {
-  font-size: 14px;
-  color: #6b7280;
-  margin-top: 16px;
+  font-size: 15px;
+  color: var(--tg-theme-hint-color, #6b7280);
+  margin-top: 24px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  background: rgba(249, 250, 251, 0.8);
-  border-radius: 12px;
+  gap: 12px;
+  padding: 16px;
+  background: var(--tg-theme-secondary-bg-color, rgba(249, 250, 251, 0.8));
+  border-radius: 16px;
+  text-align: center;
+  justify-content: center;
 }
 
 /* Иконки */
 .icon-stamp::before { content: "🖋️"; }
-.icon-user::before { content: "👤"; }
+.icon-telegram::before { content: "@"; font-family: sans-serif; font-weight: bold; }
 .icon-number::before { content: "#️⃣"; }
 .icon-add::before { content: "➕"; }
 .icon-info::before { content: "ℹ️"; }
 .icon-success::before { content: "✅"; }
 .icon-error::before { content: "❌"; }
 
-/* Анимация */
+/* Анимации */
 .fade-enter-active, .fade-leave-active {
-  transition: opacity 0.3s ease;
+  transition: opacity 0.4s ease;
 }
 .fade-enter-from, .fade-leave-to {
   opacity: 0;
 }
 
 @keyframes slideIn {
-  from { opacity: 0; transform: translateY(-10px); }
+  from { opacity: 0; transform: translateY(-20px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 /* Адаптивность */
 @media (max-width: 768px) {
+  .stamp-card { padding: 32px 20px; }
   .input-group {
     grid-template-columns: 1fr;
   }
   .btn-lg {
     width: 100%;
     margin-top: 16px;
+  }
+  .progress-dots {
+    gap: 12px;
+  }
+  .progress-dot {
+    width: 40px;
+    height: 40px;
+    font-size: 16px;
   }
 }
 </style>
