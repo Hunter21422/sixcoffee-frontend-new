@@ -13,34 +13,62 @@ app.use(router)
 // Монтируем приложение в DOM
 app.mount('#app')
 
-// === Интеграция с Telegram Web App ===
+// === ПОЛНАЯ ИНТЕГРАЦИЯ С TELEGRAM MINI APP ===
 if (window.Telegram && window.Telegram.WebApp) {
   const tg = window.Telegram.WebApp
 
-  // Сообщаем Telegram, что приложение готово
+  // 1. Сообщаем Telegram, что приложение загружено и готово
   tg.ready()
 
-  // Разворачиваем на весь экран (важно для Mini App)
+  // 2. Разворачиваем приложение на весь экран (обязательно для Mini App)
   tg.expand()
 
-  // Сохраняем initData — это строка с данными пользователя и hash для валидации на backend
+  // 3. Сохраняем initData — критически важно для безопасной авторизации на бэкенде
   if (tg.initData) {
     localStorage.setItem('tg_init_data', tg.initData)
+  } else {
+    // Если по какой-то причине initData нет — очищаем старые данные (на всякий случай)
+    localStorage.removeItem('tg_init_data')
   }
 
-  // Опционально: применяем тему Telegram (light/dark)
-  const theme = tg.colorScheme || 'light'  // 'light' или 'dark'
-  document.documentElement.setAttribute('data-theme', theme)
-  document.body.classList.toggle('dark-theme', theme === 'dark')
+  // 4. Адаптация под тему Telegram (светлая/тёмная) + поддержка динамического изменения
+  const applyTheme = () => {
+    const theme = tg.colorScheme || 'light' // 'light' или 'dark'
+    document.documentElement.setAttribute('data-theme', theme)
+    document.body.classList.toggle('dark-theme', theme === 'dark')
+  }
 
-  // Можно включить главную кнопку Telegram (например, для закрытия)
+  // Применяем тему сразу
+  applyTheme()
+
+  // Подписываемся на изменения темы (пользователь может переключить в настройках Telegram)
+  tg.onEvent('themeChanged', applyTheme)
+
+  // 5. Лёгкая вибрация при запуске — приятный UX
+  tg.HapticFeedback.notificationOccurred('success')
+
+  // 6. Опционально: настройка главной кнопки Telegram (MainButton)
+  // Пример: кнопка "Закрыть приложение"
   // tg.MainButton.setText('Закрыть')
+  // tg.MainButton.setParams({ color: '#e74c3c', text_color: '#ffffff' })
   // tg.MainButton.show()
   // tg.MainButton.onClick(() => tg.close())
+
+  // Пример: кнопка "Поделиться" или "Помощь" — раскомментируй при необходимости
+  // tg.MainButton.setText('Поделиться прогрессом')
+  // tg.MainButton.show()
+  // tg.MainButton.onClick(() => tg.shareScore?.() || alert('Поделиться!'))
 }
 
-// === Загрузка текущего пользователя (JWT или Telegram-авторизация) ===
+// === АВТОМАТИЧЕСКАЯ ЗАГРУЗКА ПОЛЬЗОВАТЕЛЯ ===
 ensureUser()
 
-// Перезагружаем данные при событии изменения авторизации
+// Перезагружаем данные пользователя при событии изменения авторизации (логин/логаут)
 window.addEventListener('auth-changed', ensureUser)
+
+// Опционально: обработка видимости приложения (когда пользователь сворачивает/разворачивает Mini App)
+if (window.Telegram?.WebApp) {
+  window.Telegram.WebApp.onEvent('viewportChanged', () => {
+    window.Telegram.WebApp.expand()
+  })
+}
