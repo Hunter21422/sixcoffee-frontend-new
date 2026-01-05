@@ -3,10 +3,10 @@
     <!-- КРАСИВЫЙ БЛОК ДЛЯ TELEGRAM MINI APP -->
     <div v-if="isTelegram" class="telegram-welcome">
       <div class="welcome-content">
-        <!-- Анимированная чашка кофе с паром -->
+        <!-- Анимированная чашка кофе с серым паром -->
         <div class="coffee-cup">
           <div class="steam">
-            <span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span><span></span>
           </div>
           <div class="cup">
             <div class="coffee"></div>
@@ -342,7 +342,7 @@ onMounted(async () => {
   width: 100%;
 }
 
-/* Анимированная чашка кофе */
+/* Анимированная чашка кофе с СЕРЫМ паром */
 .coffee-cup {
   margin-bottom: 40px;
   position: relative;
@@ -377,38 +377,49 @@ onMounted(async () => {
   box-shadow: 0 4px 10px rgba(0,0,0,0.1);
 }
 
+/* Серый пар — реалистичный дымок */
 .steam {
   position: absolute;
-  top: -20px;
+  top: -30px;
   left: 50%;
   transform: translateX(-50%);
 }
 
 .steam span {
   display: block;
-  width: 8px;
-  height: 20px;
-  background: rgba(255,255,255,0.6);
+  width: 10px;
+  height: 30px;
+  background: rgba(150, 150, 150, 0.6); /* Серый полупрозрачный пар */
   border-radius: 50%;
   position: absolute;
   bottom: 0;
-  animation: steam 3s infinite ease-out;
+  animation: steam-rise 4s infinite ease-out;
+  filter: blur(2px);
 }
 
-.steam span:nth-child(1) { left: -20px; animation-delay: 0s; }
-.steam span:nth-child(2) { left: -8px; animation-delay: 0.8s; }
-.steam span:nth-child(3) { left: 8px; animation-delay: 1.4s; }
-.steam span:nth-child(4) { left: 20px; animation-delay: 0.4s; }
+.steam span:nth-child(1) { left: -25px; animation-delay: 0s; width: 8px; height: 25px; }
+.steam span:nth-child(2) { left: -12px; animation-delay: 0.8s; width: 12px; height: 35px; }
+.steam span:nth-child(3) { left: 0; animation-delay: 1.6s; width: 10px; height: 30px; }
+.steam span:nth-child(4) { left: 12px; animation-delay: 0.4s; width: 9px; height: 28px; }
+.steam span:nth-child(5) { left: 25px; animation-delay: 1.2s; width: 11px; height: 32px; }
 
 @keyframes wave {
   0%, 100% { height: 70%; }
   50% { height: 75%; }
 }
 
-@keyframes steam {
-  0% { transform: translateY(0); opacity: 0; }
-  50% { opacity: 0.8; }
-  100% { transform: translateY(-60px); opacity: 0; }
+@keyframes steam-rise {
+  0% {
+    transform: translateY(0) scale(0.6);
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateY(-100px) scale(1.2);
+    opacity: 0;
+  }
 }
 
 /* Текст */
