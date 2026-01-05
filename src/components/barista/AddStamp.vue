@@ -104,7 +104,7 @@ const loading = ref(false);
 const msg = ref("");
 const status = ref("");
 const userStamps = ref(null);
-const maxStamps = ref(6); // можно получать с бэкенда, если меняется
+const maxStamps = ref(6);
 
 const canSubmit = computed(() =>
   !!telegramUsername.value.trim() &&
@@ -136,15 +136,15 @@ async function loadStatus() {
   status.value = "info";
 
   try {
-    const { data } = await getLoyaltyStatusByTelegram(name.slice(1)); // без @
+    const { data } = await getLoyaltyStatusByTelegram(name.slice(1)); // убираем @
     userStamps.value = Number(data.stamps ?? 0);
     maxStamps.value = Number(data.max_stamps ?? 6);
 
     if (atLimit.value) {
-      msg.value = `🎉 @${name.slice(1)} достиг лимита! Положен бесплатный напиток.`;
+      msg.value = `🎉 ${name} достиг лимита! Положен бесплатный напиток.`;
       status.value = "success";
     } else {
-      msg.value = `Найден: @${name.slice(1)} — ${userStamps.value}/${maxStamps.value} штампов`;
+      msg.value = `Найден: ${name} — ${userStamps.value}/${maxStamps.value} штампов`;
       status.value = "info";
     }
   } catch (e) {
@@ -188,13 +188,12 @@ async function submit() {
   } catch (e) {
     msg.value = e?.response?.data?.detail || "Ошибка начисления штампа";
     status.value = "error";
-    await loadStatus(); // обновляем статус
+    await loadStatus();
   } finally {
     loading.value = false;
   }
 }
 
-// Очистка при пустом поле
 watch(telegramUsername, (newVal) => {
   if (!newVal.trim()) {
     userStamps.value = null;
@@ -451,7 +450,7 @@ watch(telegramUsername, (newVal) => {
 
 /* Иконки */
 .icon-stamp::before { content: "🖋️"; }
-.icon-telegram::before { content: "@"; font-family: sans-serif; font-weight: bold; }
+.icon-telegram::before { content: "📱"; }
 .icon-number::before { content: "#️⃣"; }
 .icon-add::before { content: "➕"; }
 .icon-info::before { content: "ℹ️"; }
