@@ -29,6 +29,24 @@
           </div>
         </div>
 
+        <!-- ПЕРЕКЛЮЧАТЕЛЬ РОЛИ (только в Telegram, после загрузки профиля) -->
+        <div class="role-switch" v-if="tgUser && !loading">
+          <button
+            @click="selectRole('customer')"
+            :class="['role-btn', { active: currentRole === 'customer' }]"
+          >
+            <i class="icon-user"></i>
+            Клиент
+          </button>
+          <button
+            @click="selectRole('barista')"
+            :class="['role-btn', { active: currentRole === 'barista' }]"
+          >
+            <i class="icon-barista"></i>
+            Бариста
+          </button>
+        </div>
+
         <!-- Статус загрузки -->
         <div class="loading-status">
           <div class="loader" v-if="loading"></div>
@@ -44,7 +62,7 @@
       </div>
     </div>
 
-    <!-- ОБЫЧНАЯ ФОРМА ЛОГИНА -->
+    <!-- ОБЫЧНАЯ ФОРМА ЛОГИНА (если НЕ в Telegram) -->
     <div v-else class="auth-card glass-card">
       <div class="auth-header">
         <div class="logo">
@@ -139,6 +157,7 @@ const router = useRouter();
 
 const { isTelegram, tgUser } = useTelegram();
 
+// Для обычного логина (браузер)
 const userType = ref("customer");
 const username = ref("");
 const password = ref("");
@@ -146,6 +165,9 @@ const employeeCode = ref("");
 const loading = ref(false);
 const error = ref("");
 const isCodeError = ref(false);
+
+// Для Telegram — текущая выбранная роль
+const currentRole = ref(localStorage.getItem("user_type") || "customer");
 
 const buttonText = computed(() => {
   return userType.value === "customer" ? "Войти в систему" : "Войти в панель баристы";
@@ -166,6 +188,16 @@ function clearError() {
   isCodeError.value = false;
 }
 
+// === ВЫБОР РОЛИ В TELEGRAM ===
+function selectRole(role) {
+  currentRole.value = role;
+  localStorage.setItem("user_type", role);
+
+  // Немедленный редирект после выбора роли
+  router.push(role === "barista" ? "/barista" : "/loyalty");
+}
+
+// Обычный логин (браузер)
 async function submitLogin() {
   clearError();
   loading.value = true;
@@ -223,16 +255,23 @@ async function submitLogin() {
 }
 
 onMounted(async () => {
-  if (!isTelegram.value) logout();
+  if (!isTelegram.value) {
+    logout();
+  }
 
   if (isTelegram.value) {
     loading.value = true;
     await ensureUser();
 
+    // Восстанавливаем сохранённую роль
     const storedType = localStorage.getItem("user_type");
-    const target = storedType === "barista" ? "/barista" : "/loyalty";
+    if (storedType) {
+      currentRole.value = storedType;
+    }
 
+    // Автоматический редирект через 800мс, если роль уже выбрана
     setTimeout(() => {
+      const target = currentRole.value === "barista" ? "/barista" : "/loyalty";
       router.push(target);
     }, 800);
   }
@@ -275,7 +314,7 @@ onMounted(async () => {
   width: 100%;
 }
 
-/* === ПОЛНОСТЬЮ НЕПОДВИЖНАЯ ЧАШКА КОФЕ С РУЧКОЙ И СЕРЫМ ПАРОМ === */
+/* === НЕПОДВИЖНАЯ ЧАШКА КОФЕ С РУЧКОЙ И СЕРЫМ ПАРОМ === */
 .coffee-cup {
   margin-bottom: 50px;
   position: relative;
@@ -283,10 +322,8 @@ onMounted(async () => {
   height: 130px;
   margin-left: auto;
   margin-right: auto;
-  /* Никаких анимаций вращения или движения — чашка стоит как вкопанная */
 }
 
-/* Чашка */
 .cup {
   position: absolute;
   bottom: 20px;
@@ -300,7 +337,6 @@ onMounted(async () => {
   box-shadow: 0 8px 20px rgba(0,0,0,0.3);
 }
 
-/* Ручка чашки */
 .handle {
   position: absolute;
   right: -25px;
@@ -313,7 +349,6 @@ onMounted(async () => {
   box-shadow: 2px 2px 8px rgba(0,0,0,0.2);
 }
 
-/* Кофе внутри */
 .coffee {
   position: absolute;
   bottom: 0;
@@ -324,7 +359,6 @@ onMounted(async () => {
   animation: wave 4s ease-in-out infinite;
 }
 
-/* Блюдце */
 .saucer {
   position: absolute;
   bottom: 0;
@@ -337,7 +371,7 @@ onMounted(async () => {
   box-shadow: 0 4px 10px rgba(0,0,0,0.2);
 }
 
-/* Серый пар — реалистичный и плавный */
+/* Серый пар */
 .steam {
   position: absolute;
   top: 10px;
@@ -440,6 +474,48 @@ onMounted(async () => {
   margin: 4px 0 0;
 }
 
+/* Переключатель роли в Telegram */
+.role-switch {
+  display: flex;
+  gap: 16px;
+  margin: 40px 0 20px;
+  justify-content: center;
+}
+
+.role-btn {
+  padding: 16px 32px;
+  border: none;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.3s ease;
+  min-width: 140px;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.role-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
+}
+
+.role-btn.active {
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
+  transform: translateY(-4px);
+}
+
+.role-btn i {
+  font-size: 20px;
+}
+
 /* Загрузка */
 .loading-status {
   margin-top: 40px;
@@ -465,7 +541,7 @@ onMounted(async () => {
   opacity: 0.9;
 }
 
-/* Частицы на фоне */
+/* Частицы */
 .particles {
   position: absolute;
   inset: 0;
