@@ -1,5 +1,5 @@
 <template>
-  <div class="profile-container">
+  <div class="profile-container" :class="{ 'tg-mode': isTelegram }">
     <div class="profile-card glass-card">
       <div class="profile-header">
         <div class="avatar-circle">
@@ -43,8 +43,8 @@
 
           <div class="info-item full-width">
             <div class="progress-bar-profile">
-              <div 
-                class="progress-fill-profile" 
+              <div
+                class="progress-fill-profile"
                 :style="{ width: `${loyaltyProgress}%` }"
               ></div>
             </div>
@@ -56,9 +56,9 @@
 
         <!-- Кнопки действий -->
         <div class="actions-section">
-          <router-link 
-            v-if="currentViewRole === 'customer'" 
-            to="/loyalty" 
+          <router-link
+            v-if="currentViewRole === 'customer'"
+            to="/loyalty"
             class="btn-primary btn-full btn-with-icon"
           >
             <i class="icon-loyalty"></i>
@@ -71,7 +71,7 @@
           </button>
         </div>
 
-        <!-- Подсказка для баристы — только в режиме "Бариста" -->
+        <!-- Подсказка для баристы -->
         <transition name="fade">
           <div v-if="currentViewRole === 'barista'" class="barista-panel-hint">
             <i class="icon-barista"></i>
@@ -92,36 +92,31 @@
 import { computed, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import { user, ensureUser } from "@/stores/auth";
+import { useTelegram } from "@/composables/useTelegram";
 
 const router = useRouter();
+const { isTelegram } = useTelegram();
 
 const maxStamps = 6;
 
-// Данные пользователя из стора
+// Данные пользователя
 const currentUser = computed(() => user.value || { username: "Загрузка..." });
+const currentStamps = computed(() => user.value?.stamps ?? 0);
 
-// Штампы — теперь всегда актуальные
-const currentStamps = computed(() => {
-  return user.value?.stamps ?? 0;
-});
-
-// Реальная роль (бариста или клиент)
+// Реальная роль с бэкенда
 const isRealBarista = computed(() => {
   const u = user.value;
   return u ? (u.is_barista === true || u.is_staff === true) : false;
 });
 
-// Текущий режим просмотра
-const viewMode = computed(() => {
-  return localStorage.getItem("view_mode") || "customer";
-});
-
-// Виртуальная роль для отображения
+// Текущий режим просмотра (из localStorage)
 const currentViewRole = computed(() => {
-  return isRealBarista.value ? viewMode.value : "customer";
+  if (!isRealBarista.value) return "customer";
+  const saved = localStorage.getItem("user_type");
+  return saved === "barista" ? "barista" : "customer";
 });
 
-// Текст и класс роли
+// Отображаемый текст роли
 const displayRoleText = computed(() => {
   return currentViewRole.value === "barista" ? "Бариста" : "Клиент";
 });
@@ -131,39 +126,33 @@ const roleBadgeClass = computed(() => ({
   'role-customer': currentViewRole.value === "customer"
 }));
 
-// Прогресс
+// Прогресс лояльности
 const loyaltyProgress = computed(() => (currentStamps.value / maxStamps) * 100);
+const stampsToFree = computed(() => Math.max(maxStamps - currentStamps.value, 0));
 
-const stampsToFree = computed(() => maxStamps - currentStamps.value);
-
-// === АВТООБНОВЛЕНИЕ ДАННЫХ ===
+// Обновление данных
 async function refreshProfile() {
-  await ensureUser();  // перезагружает user.value с сервера (включая актуальные stamps)
+  await ensureUser();
 }
 
-// Обновляем при открытии страницы
 onMounted(() => {
   refreshProfile();
-
-  // Обновляем при возвращении на вкладку (фокус окна)
   window.addEventListener("focus", refreshProfile);
 });
 
-// Убираем слушатель при уходе со страницы
 onUnmounted(() => {
   window.removeEventListener("focus", refreshProfile);
 });
 
 function handleLogout() {
-  localStorage.removeItem("access");
-  localStorage.removeItem("refresh");
-  localStorage.removeItem("view_mode");
+  localStorage.clear(); // Полная очистка
   user.value = null;
   router.push("/login");
 }
 </script>
 
 <style scoped>
+/* === ОСНОВНОЙ КОНТЕЙНЕР === */
 .profile-container {
   min-height: 100vh;
   display: flex;
@@ -173,8 +162,15 @@ function handleLogout() {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   position: relative;
   overflow: hidden;
+  transition: background 0.3s ease;
 }
 
+/* В Telegram — фон по теме Telegram */
+.profile-container.tg-mode {
+  background: var(--tg-theme-bg-color, #ffffff);
+}
+
+/* Анимированный фон только в браузере */
 .profile-container::before {
   content: '';
   position: absolute;
@@ -182,10 +178,16 @@ function handleLogout() {
   left: -50%;
   right: -50%;
   bottom: -50%;
-  background: 
+  background:
     radial-gradient(circle at 20% 80%, rgba(255,255,255,0.1) 0%, transparent 50%),
     radial-gradient(circle at 80% 20%, rgba(255,255,255,0.1) 0%, transparent 50%);
   animation: float 20s infinite linear;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+.profile-container.tg-mode::before {
+  opacity: 0; /* Убираем анимированный фон в Telegram */
 }
 
 @keyframes float {
@@ -193,6 +195,7 @@ function handleLogout() {
   100% { transform: rotate(360deg); }
 }
 
+/* Карточка профиля */
 .profile-card {
   width: 100%;
   max-width: 520px;
@@ -202,6 +205,13 @@ function handleLogout() {
   padding: 40px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: background 0.3s ease;
+}
+
+/* В Telegram — карточка под тему */
+.profile-container.tg-mode .profile-card {
+  background: var(--tg-theme-secondary-bg-color, rgba(255, 255, 255, 0.9));
+  color: var(--tg-theme-text-color, #000000);
 }
 
 .profile-header {
@@ -238,6 +248,15 @@ function handleLogout() {
   color: #6b7280;
 }
 
+/* Тёмная тема Telegram */
+.profile-container.tg-mode .profile-title,
+.profile-container.tg-mode .profile-subtitle,
+.profile-container.tg-mode .info-label,
+.profile-container.tg-mode .info-value,
+.profile-container.tg-mode .progress-text {
+  color: var(--tg-theme-text-color, #000000);
+}
+
 .profile-body {
   display: flex;
   flex-direction: column;
@@ -256,6 +275,10 @@ function handleLogout() {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.profile-container.tg-mode .info-item {
+  background: var(--tg-theme-secondary-bg-color, rgba(240, 240, 240, 0.8));
 }
 
 .info-item.full-width {
@@ -317,6 +340,10 @@ function handleLogout() {
   border-radius: 8px;
   overflow: hidden;
   margin: 12px 0;
+}
+
+.profile-container.tg-mode .progress-bar-profile {
+  background: var(--tg-theme-hint-color, #e0e0e0);
 }
 
 .progress-fill-profile {
@@ -394,9 +421,16 @@ function handleLogout() {
   flex-wrap: wrap;
 }
 
+.profile-container.tg-mode .barista-panel-hint {
+  background: var(--tg-theme-secondary-bg-color, rgba(99, 102, 241, 0.1));
+  color: var(--tg-theme-link-color, #4f46e5);
+  border-color: var(--tg-theme-link-color, rgba(99, 102, 241, 0.3));
+}
+
 .barista-panel-hint .auth-link {
   font-weight: 700;
   text-decoration: underline;
+  color: inherit;
 }
 
 .fade-enter-active, .fade-leave-active {
@@ -408,6 +442,7 @@ function handleLogout() {
   transform: translateY(-10px);
 }
 
+/* Иконки */
 .icon-user-large::before { content: "👤"; }
 .icon-user::before { content: "👤"; }
 .icon-barista::before { content: "🎩"; }
@@ -415,25 +450,7 @@ function handleLogout() {
 .icon-loyalty::before { content: "🏆"; }
 .icon-logout::before { content: "🚪"; }
 
-@media (prefers-color-scheme: dark) {
-  .profile-card {
-    background: rgba(17, 24, 39, 0.95);
-    border-color: rgba(255, 255, 255, 0.1);
-  }
-
-  .profile-title, .info-value, .stamps-count {
-    color: #f1f5f9;
-  }
-
-  .info-item {
-    background: rgba(51, 65, 85, 0.8);
-  }
-
-  .progress-bar-profile {
-    background: #475569;
-  }
-}
-
+/* Адаптивность */
 @media (max-width: 640px) {
   .profile-card { padding: 32px 24px; }
   .profile-title { font-size: 28px; }
