@@ -1,5 +1,4 @@
-// src/router/index.js — исправленная версия с поддержкой переключения режимов
-
+// src/router/index.js — финальная версия с поддержкой Telegram и переключения ролей
 import { createRouter, createWebHistory } from "vue-router";
 import { logout } from "@/api"; // функция полной очистки сессии
 
@@ -34,18 +33,18 @@ const routes = [
     meta: { public: true },
   },
 
-  // Клиентские маршруты — доступны ВСЕМ авторизованным (и клиентам, и баристам)
+  // Клиентские маршруты — доступны ВСЕМ авторизованным (клиентам и баристам)
   {
     path: "/loyalty",
     name: "loyalty",
     component: LoyaltyPage,
-    meta: { requiresAuth: true }, // убрали role: "customer"
+    meta: { requiresAuth: true },
   },
   {
     path: "/profile",
     name: "profile",
     component: ProfilePage,
-    meta: { requiresAuth: true }, // убрали role: "customer"
+    meta: { requiresAuth: true },
   },
 
   // Маршрут ТОЛЬКО для баристы
@@ -72,17 +71,32 @@ function getCurrentRole() {
 }
 
 function getHomePath(role) {
+  if (role === "barista") return "/barista";
   if (role === "customer") return "/loyalty";
-  if (role === "barista") return "/barista"; // бариста по умолчанию в панель
   return "/login";
 }
 
 // Глобальный navigation guard
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   const token = localStorage.getItem("access");
   const role = getCurrentRole();
 
-  // === 1. Переход на /login ===
+  // === Специальный случай: Telegram Mini App ===
+  if (window.Telegram?.WebApp) {
+    // В Telegram все маршруты доступны без проверки (авторизация уже прошла)
+    // Проверяем только ?role=barista в URL (если пользователь открыл через кнопку баристы)
+    const urlParams = new URLSearchParams(window.location.search);
+    const forcedRole = urlParams.get("role");
+    if (forcedRole === "barista") {
+      localStorage.setItem("user_type", "barista");
+    }
+    // Пускаем дальше — Telegram уже авторизован
+    return next();
+  }
+
+  // === Обычный браузер — полная проверка ===
+
+  // 1. Переход на /login
   if (to.path === "/login") {
     if (token && role) {
       // Уже залогинен — сразу в свою домашнюю страницу
@@ -93,12 +107,12 @@ router.beforeEach((to, from, next) => {
     return next();
   }
 
-  // === 2. Публичные страницы ===
+  // 2. Публичные страницы
   if (to.meta.public) {
     return next();
   }
 
-  // === 3. Защищённые маршруты ===
+  // 3. Защищённые маршруты
   if (to.meta.requiresAuth) {
     // Нет токена
     if (!token) {
