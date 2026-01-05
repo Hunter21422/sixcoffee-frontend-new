@@ -1,30 +1,49 @@
 <template>
   <div class="auth-container">
-    <!-- БЛОК ДЛЯ TELEGRAM MINI APP: Автоматический вход -->
-    <div v-if="isTelegram" class="telegram-auto-login">
-      <div class="auto-login-card glass-card">
-        <div class="welcome-icon">
-          <i class="icon-coffee-large"></i>
+    <!-- КРАСИВЫЙ БЛОК ДЛЯ TELEGRAM MINI APP -->
+    <div v-if="isTelegram" class="telegram-welcome">
+      <div class="welcome-content">
+        <!-- Анимированная чашка кофе с паром -->
+        <div class="coffee-cup">
+          <div class="steam">
+            <span></span><span></span><span></span><span></span>
+          </div>
+          <div class="cup">
+            <div class="coffee"></div>
+          </div>
+          <div class="saucer"></div>
         </div>
-        <h2>Добро пожаловать!</h2>
-        <p class="welcome-text">Вы вошли через Telegram как:</p>
 
-        <div class="tg-user-info" v-if="tgUser">
-          <div class="tg-avatar">
+        <h1 class="welcome-title">Добро пожаловать!</h1>
+        <p class="welcome-subtitle">Вы вошли через Telegram</p>
+
+        <!-- Информация о пользователе -->
+        <div class="user-card" v-if="tgUser">
+          <div class="user-avatar-large">
             {{ tgUser.first_name?.[0]?.toUpperCase() || 'U' }}
           </div>
-          <div class="tg-details">
-            <strong>{{ tgUser.first_name }} {{ tgUser.last_name || '' }}</strong>
-            <span v-if="tgUser.username" class="tg-username">@{{ tgUser.username }}</span>
+          <div class="user-info">
+            <h2 class="user-name">{{ tgUser.first_name }} {{ tgUser.last_name || '' }}</h2>
+            <p v-if="tgUser.username" class="user-username">@{{ tgUser.username }}</p>
           </div>
         </div>
 
-        <p class="loading-text" v-if="loading">Загружаем ваш профиль лояльности...</p>
-        <p class="loading-text" v-else>Готово! Перенаправляем...</p>
+        <!-- Статус загрузки -->
+        <div class="loading-status">
+          <div class="loader" v-if="loading"></div>
+          <p class="status-text">
+            {{ loading ? 'Загружаем ваш профиль лояльности...' : 'Готово! Перенаправляем...' }}
+          </p>
+        </div>
+      </div>
+
+      <!-- Частицы на фоне -->
+      <div class="particles">
+        <span v-for="n in 15" :key="n" :style="{ '--i': n }"></span>
       </div>
     </div>
 
-    <!-- ОБЫЧНАЯ ФОРМА ЛОГИНА: Только если НЕ в Telegram -->
+    <!-- ОБЫЧНАЯ ФОРМА ЛОГИНА (если НЕ в Telegram) -->
     <div v-else class="auth-card glass-card">
       <div class="auth-header">
         <div class="logo">
@@ -85,7 +104,7 @@
           </div>
         </div>
 
-        <!-- Мастер-код сотрудника (только для баристы) -->
+        <!-- Мастер-код для баристы -->
         <transition name="slide-fade">
           <div v-if="userType === 'barista'" class="form-group">
             <label class="form-label">Мастер-код сотрудника</label>
@@ -108,7 +127,6 @@
 
         <!-- Кнопка входа -->
         <button type="submit" class="btn-primary btn-full" :disabled="loading">
-          <i :class="userType === 'customer' ? 'icon-login' : 'icon-staff'"></i>
           {{ loading ? (userType === 'customer' ? 'Входим…' : 'Входим в панель…') : buttonText }}
         </button>
 
@@ -155,7 +173,7 @@ import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { loginJWT, loginBaristaJWT, logout } from "@/api";
 import { ensureUser } from "@/stores/auth";
-import { useTelegram } from "@/composables/useTelegram"; // ← Обязательно создай этот файл!
+import { useTelegram } from "@/composables/useTelegram";
 
 const router = useRouter();
 
@@ -190,7 +208,6 @@ function clearError() {
   isCodeError.value = false;
 }
 
-// Обычный логин (только если НЕ в Telegram)
 async function submitLogin() {
   clearError();
   loading.value = true;
@@ -228,8 +245,6 @@ async function submitLogin() {
     window.dispatchEvent(new CustomEvent("auth-changed"));
     await ensureUser();
 
-    await new Promise(resolve => setTimeout(resolve, 100));
-
     router.push(userType.value === "barista" ? "/barista" : "/loyalty");
   } catch (e) {
     console.error("Ошибка входа:", e);
@@ -254,14 +269,11 @@ async function submitLogin() {
   }
 }
 
-// При монтировании
 onMounted(async () => {
-  // Очищаем старую сессию только если НЕ в Telegram
   if (!isTelegram.value) {
     logout();
   }
 
-  // Если в Telegram — запускаем автоматический вход
   if (isTelegram.value) {
     loading.value = true;
     await ensureUser();
@@ -277,6 +289,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* === ОБЩИЙ КОНТЕЙНЕР === */
 .auth-container {
   min-height: 100vh;
   display: flex;
@@ -307,6 +320,211 @@ onMounted(async () => {
   100% { transform: rotate(360deg); }
 }
 
+/* === КРАСИВЫЙ TELEGRAM WELCOME SCREEN === */
+.telegram-welcome {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--tg-theme-bg-color, #667eea) 0%, var(--tg-theme-secondary-bg-color, #764ba2) 100%);
+  color: var(--tg-theme-text-color, #ffffff);
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.welcome-content {
+  text-align: center;
+  z-index: 2;
+  max-width: 420px;
+  width: 100%;
+}
+
+/* Анимированная чашка кофе */
+.coffee-cup {
+  margin-bottom: 40px;
+  position: relative;
+  animation: float 6s ease-in-out infinite;
+}
+
+.cup {
+  width: 100px;
+  height: 80px;
+  background: #fff;
+  border-radius: 0 0 50px 50px;
+  position: relative;
+  margin: 0 auto;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
+.coffee {
+  width: 100%;
+  height: 70%;
+  background: linear-gradient(#4a2c1a, #6b3f1e);
+  border-radius: 0 0 45px 45px;
+  animation: wave 4s ease-in-out infinite;
+}
+
+.saucer {
+  width: 140px;
+  height: 20px;
+  background: #fff;
+  border-radius: 50%;
+  margin: 10px auto 0;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+.steam {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.steam span {
+  display: block;
+  width: 8px;
+  height: 20px;
+  background: rgba(255,255,255,0.6);
+  border-radius: 50%;
+  position: absolute;
+  bottom: 0;
+  animation: steam 3s infinite ease-out;
+}
+
+.steam span:nth-child(1) { left: -20px; animation-delay: 0s; }
+.steam span:nth-child(2) { left: -8px; animation-delay: 0.8s; }
+.steam span:nth-child(3) { left: 8px; animation-delay: 1.4s; }
+.steam span:nth-child(4) { left: 20px; animation-delay: 0.4s; }
+
+@keyframes wave {
+  0%, 100% { height: 70%; }
+  50% { height: 75%; }
+}
+
+@keyframes steam {
+  0% { transform: translateY(0); opacity: 0; }
+  50% { opacity: 0.8; }
+  100% { transform: translateY(-60px); opacity: 0; }
+}
+
+/* Текст */
+.welcome-title {
+  font-size: 36px;
+  font-weight: 700;
+  margin: 0 0 12px;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+}
+
+.welcome-subtitle {
+  font-size: 18px;
+  opacity: 0.9;
+  margin-bottom: 40px;
+}
+
+/* Карточка пользователя */
+.user-card {
+  background: rgba(255,255,255,0.15);
+  backdrop-filter: blur(20px);
+  border-radius: 24px;
+  padding: 24px;
+  margin: 32px 0;
+  border: 1px solid rgba(255,255,255,0.2);
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+}
+
+.user-avatar-large {
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  font-weight: bold;
+  color: white;
+  flex-shrink: 0;
+}
+
+.user-info {
+  text-align: left;
+  flex: 1;
+}
+
+.user-name {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.user-username {
+  font-size: 16px;
+  opacity: 0.8;
+  margin: 4px 0 0;
+}
+
+/* Загрузка */
+.loading-status {
+  margin-top: 40px;
+}
+
+.loader {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(255,255,255,0.3);
+  border-top: 4px solid white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 20px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.status-text {
+  font-size: 18px;
+  font-weight: 500;
+  opacity: 0.9;
+}
+
+/* Частицы */
+.particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.particles span {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: rgba(255,255,255,0.4);
+  border-radius: 50%;
+  animation: particle 15s linear infinite;
+}
+
+.particles span:nth-child(odd) {
+  background: rgba(255,255,255,0.6);
+}
+
+@keyframes particle {
+  0% { transform: translate(0, 100vh); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translate(var(--x, 0), -100px); opacity: 0; }
+}
+
+.particles span { --x: calc(10vw * var(--i) - 50vw); animation-delay: calc(0.8s * var(--i)); }
+
+/* === ОБЫЧНАЯ ФОРМА ЛОГИНА === */
 .auth-card {
   width: 100%;
   max-width: 440px;
@@ -572,87 +790,14 @@ onMounted(async () => {
   opacity: 0;
 }
 
-/* === НОВЫЕ СТИЛИ ДЛЯ TELEGRAM-БЛОКА === */
-.telegram-auto-login {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-
-.auto-login-card {
-  text-align: center;
-  padding: 48px 40px;
-  max-width: 420px;
-  width: 100%;
-}
-
-.welcome-icon {
-  font-size: 64px;
-  margin-bottom: 24px;
-}
-
-.icon-coffee-large::before {
-  content: "☕";
-}
-
-.welcome-text {
-  color: #6b7280;
-  margin-bottom: 20px;
-  font-size: 16px;
-}
-
-.tg-user-info {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  margin: 24px 0;
-  padding: 16px;
-  background: rgba(99, 102, 241, 0.1);
-  border-radius: 16px;
-}
-
-.tg-avatar {
-  width: 60px;
-  height: 60px;
-  background: #6366f1;
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28px;
-  font-weight: bold;
-}
-
-.tg-details {
-  text-align: left;
-}
-
-.tg-username {
-  display: block;
-  color: #6366f1;
-  margin-top: 4px;
-  font-weight: 500;
-}
-
-.loading-text {
-  color: #6366f1;
-  font-weight: 600;
-  margin-top: 20px;
-}
-
 /* === ИКОНКИ === */
 .icon-coffee::before { content: "☕"; }
+.icon-coffee-large::before { content: "☕"; }
 .icon-user::before { content: "👤"; }
 .icon-barista::before { content: "🎩"; }
 .icon-key::before { content: "🔑"; }
 .icon-info::before { content: "ℹ️"; }
 .icon-lock::before { content: "🔒"; }
-.icon-login::before { content: "🚪"; }
-.icon-staff::before { content: "👨‍🍳"; }
 .icon-error::before { content: "❌"; }
 .icon-warning::before { content: "⚠️"; }
 
@@ -679,10 +824,6 @@ onMounted(async () => {
     color: white;
   }
   
-  .helper-text {
-    color: #9ca3af;
-  }
-  
   .form-input {
     background: rgba(30, 41, 59, 0.9);
     border-color: #475569;
@@ -702,16 +843,6 @@ onMounted(async () => {
     background: rgba(127, 29, 29, 0.3);
     border-color: #7f1d1d;
     color: #fca5a5;
-  }
-  
-  .code-error-help {
-    background: rgba(127, 29, 29, 0.2);
-    border-left-color: #f87171;
-    color: #fca5a5;
-  }
-  
-  .code-error-help i {
-    color: #f87171;
   }
 }
 
