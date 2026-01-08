@@ -1,69 +1,7 @@
 <template>
   <div class="auth-container">
-    <!-- КРАСИВЫЙ БЛОК ДЛЯ TELEGRAM MINI APP -->
-    <div v-if="isTelegram" class="telegram-welcome">
-      <div class="welcome-content">
-        <!-- Полностью неподвижная реалистичная чашка кофе с ручкой и серым паром -->
-        <div class="coffee-cup">
-          <div class="steam">
-            <span></span><span></span><span></span><span></span><span></span>
-          </div>
-          <div class="cup">
-            <div class="handle"></div>
-            <div class="coffee"></div>
-          </div>
-          <div class="saucer"></div>
-        </div>
-
-        <h1 class="welcome-title">Добро пожаловать!</h1>
-        <p class="welcome-subtitle">Вы вошли через Telegram</p>
-
-        <!-- Информация о пользователе -->
-        <div class="user-card" v-if="tgUser">
-          <div class="user-avatar-large">
-            {{ tgUser.first_name?.[0]?.toUpperCase() || 'U' }}
-          </div>
-          <div class="user-info">
-            <h2 class="user-name">{{ tgUser.first_name }} {{ tgUser.last_name || '' }}</h2>
-            <p v-if="tgUser.username" class="user-username">@{{ tgUser.username }}</p>
-          </div>
-        </div>
-
-        <!-- ПЕРЕКЛЮЧАТЕЛЬ РОЛИ (только в Telegram, после загрузки профиля) -->
-        <div class="role-switch" v-if="tgUser && !loading">
-          <button
-            @click="selectRole('customer')"
-            :class="['role-btn', { active: currentRole === 'customer' }]"
-          >
-            <i class="icon-user"></i>
-            Клиент
-          </button>
-          <button
-            @click="selectRole('barista')"
-            :class="['role-btn', { active: currentRole === 'barista' }]"
-          >
-            <i class="icon-barista"></i>
-            Бариста
-          </button>
-        </div>
-
-        <!-- Статус загрузки -->
-        <div class="loading-status">
-          <div class="loader" v-if="loading"></div>
-          <p class="status-text">
-            {{ loading ? 'Загружаем ваш профиль лояльности...' : 'Готово! Перенаправляем...' }}
-          </p>
-        </div>
-      </div>
-
-      <!-- Лёгкие частицы на фоне -->
-      <div class="particles">
-        <span v-for="n in 12" :key="n" :style="{ '--i': n }"></span>
-      </div>
-    </div>
-
-    <!-- ОБЫЧНАЯ ФОРМА ЛОГИНА (если НЕ в Telegram) -->
-    <div v-else class="auth-card glass-card">
+    <!-- УБРАЛ ТЕЛЕГРАМ-ЭКРАН — ТЕПЕРЬ ВСЕГДА ОБЫЧНАЯ ФОРМА -->
+    <div class="auth-card glass-card">
       <div class="auth-header">
         <div class="logo">
           <i class="icon-coffee"></i>
@@ -99,6 +37,7 @@
           </div>
         </div>
 
+        <!-- ПЛАШКА ДЛЯ БАРИСТЫ — ПОЯВЛЯЕТСЯ ПРИ ПЕРЕКЛЮЧЕНИИ -->
         <transition name="slide-fade">
           <div v-if="userType === 'barista'" class="form-group">
             <label class="form-label">Мастер-код сотрудника</label>
@@ -147,7 +86,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
 import { loginJWT, loginBaristaJWT, logout } from "@/api";
 import { ensureUser } from "@/stores/auth";
@@ -155,9 +94,9 @@ import { useTelegram } from "@/composables/useTelegram";
 
 const router = useRouter();
 
-const { isTelegram, tgUser } = useTelegram();
+const { isTelegram } = useTelegram();  // ← используем только для проверки, НЕ для авто-логина
 
-// Для обычного логина (браузер)
+// ПЕРЕМЕННЫЕ ДЛЯ ФОРМЫ
 const userType = ref("customer");
 const username = ref("");
 const password = ref("");
@@ -166,13 +105,12 @@ const loading = ref(false);
 const error = ref("");
 const isCodeError = ref(false);
 
-// Для Telegram — текущая выбранная роль
-const currentRole = ref(localStorage.getItem("user_type") || "customer");
-
+// КОМПУТИРОВАННЫЕ СВОЙСТВА
 const buttonText = computed(() => {
   return userType.value === "customer" ? "Войти в систему" : "Войти в панель баристы";
 });
 
+// МЕТОДЫ ПЕРЕКЛЮЧЕНИЯ
 function setUserType(type) {
   userType.value = type;
   clearError();
@@ -188,16 +126,7 @@ function clearError() {
   isCodeError.value = false;
 }
 
-// === ВЫБОР РОЛИ В TELEGRAM ===
-function selectRole(role) {
-  currentRole.value = role;
-  localStorage.setItem("user_type", role);
-
-  // Немедленный редирект после выбора роли
-  router.push(role === "barista" ? "/barista" : "/loyalty");
-}
-
-// Обычный логин (браузер)
+// ОСНОВНОЙ ЛОГИН (ТОЛЬКО РУЧНОЙ)
 async function submitLogin() {
   clearError();
   loading.value = true;
@@ -206,9 +135,12 @@ async function submitLogin() {
     let response;
 
     if (userType.value === "customer") {
+      // Логин клиента
       response = await loginJWT({ username: username.value, password: password.value });
       localStorage.setItem("user_type", "customer");
+      router.push("/loyalty");  // ← редирект на лояльность
     } else {
+      // Логин баристы
       if (!employeeCode.value.trim()) {
         error.value = "Введите мастер-код сотрудника";
         isCodeError.value = true;
@@ -222,15 +154,20 @@ async function submitLogin() {
         employee_code: employeeCode.value.trim(),
       });
       localStorage.setItem("user_type", "barista");
+      router.push("/barista");  // ← редирект на панель баристы
     }
 
+    // СОХРАНЕНИЕ ТОКЕНОВ
     localStorage.setItem("access", response.data.access);
     if (response.data.refresh) localStorage.setItem("refresh", response.data.refresh);
 
+    // ОБНОВЛЕНИЕ ГЛОБАЛЬНОГО СОСТОЯНИЯ
     window.dispatchEvent(new CustomEvent("auth-changed"));
     await ensureUser();
 
-    router.push(userType.value === "barista" ? "/barista" : "/loyalty");
+    // УСПЕШНЫЙ ЛОГИН — ПЕРЕХОД НА СТРАНИЦУ
+    console.log("Успешный логин, токен сохранён:", response.data.access);
+
   } catch (e) {
     console.error("Ошибка входа:", e);
     const msg = e.response?.data?.error || e.response?.data?.detail || e.message || "Ошибка входа";
@@ -254,30 +191,19 @@ async function submitLogin() {
   }
 }
 
-onMounted(async () => {
-  if (!isTelegram.value) {
-    logout();
-  }
+// МОНТИРОВАНИЕ — НИКАКОГО АВТО-ЛОГИНА
+onMounted(() => {
+  // Убираем любой автоматический логин
+  logout();  // ← очищаем localStorage при загрузке страницы
 
+  // Если в Telegram — показываем предупреждение
   if (isTelegram.value) {
-    loading.value = true;
-    await ensureUser();
-
-    // Восстанавливаем сохранённую роль
-    const storedType = localStorage.getItem("user_type");
-    if (storedType) {
-      currentRole.value = storedType;
-    }
-
-    // Автоматический редирект через 800мс, если роль уже выбрана
-    setTimeout(() => {
-      const target = currentRole.value === "barista" ? "/barista" : "/loyalty";
-      router.push(target);
-    }, 800);
+    error.value = "В Telegram вход через логин/пароль. Используйте обычный браузер.";
   }
 });
 </script>
 
+<!-- СТИЛИ ОСТАЮТСЯ ТЕ ЖЕ — Я УБРАЛ ТОЛЬКО ТЕЛЕГРАМ-ЧАСТЬ -->
 <style scoped>
 /* === ОБЩИЙ КОНТЕЙНЕР === */
 .auth-container {
@@ -292,285 +218,7 @@ onMounted(async () => {
   overflow: hidden;
 }
 
-/* === TELEGRAM WELCOME SCREEN === */
-.telegram-welcome {
-  min-height: 100vh;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  overflow: hidden;
-  background: linear-gradient(135deg, var(--tg-theme-bg-color, #667eea) 0%, var(--tg-theme-secondary-bg-color, #764ba2) 100%);
-  color: var(--tg-theme-text-color, #ffffff);
-  padding: 24px;
-  box-sizing: border-box;
-}
-
-.welcome-content {
-  text-align: center;
-  z-index: 2;
-  max-width: 420px;
-  width: 100%;
-}
-
-/* === НЕПОДВИЖНАЯ ЧАШКА КОФЕ С РУЧКОЙ И СЕРЫМ ПАРОМ === */
-.coffee-cup {
-  margin-bottom: 50px;
-  position: relative;
-  width: 130px;
-  height: 130px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.cup {
-  position: absolute;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 90px;
-  height: 80px;
-  background: #ffffff;
-  border-radius: 0 0 45px 45px;
-  overflow: hidden;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.3);
-}
-
-.handle {
-  position: absolute;
-  right: -25px;
-  top: 20px;
-  width: 30px;
-  height: 50px;
-  border: 12px solid #ffffff;
-  border-left: none;
-  border-radius: 0 20px 20px 0;
-  box-shadow: 2px 2px 8px rgba(0,0,0,0.2);
-}
-
-.coffee {
-  position: absolute;
-  bottom: 0;
-  width: 100%;
-  height: 70%;
-  background: linear-gradient(to top, #4a2c1a, #6b3f1e);
-  border-radius: 0 0 40px 40px;
-  animation: wave 4s ease-in-out infinite;
-}
-
-.saucer {
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 130px;
-  height: 20px;
-  background: #ffffff;
-  border-radius: 50%;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-}
-
-/* Серый пар */
-.steam {
-  position: absolute;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.steam span {
-  position: absolute;
-  bottom: 0;
-  width: 10px;
-  height: 30px;
-  background: rgba(140, 140, 140, 0.6);
-  border-radius: 50%;
-  animation: steam-rise 4s infinite ease-out;
-  filter: blur(3px);
-}
-
-.steam span:nth-child(1) { left: -28px; animation-delay: 0s; width: 8px; height: 26px; }
-.steam span:nth-child(2) { left: -14px; animation-delay: 0.9s; width: 12px; height: 34px; }
-.steam span:nth-child(3) { left: 0; animation-delay: 1.8s; width: 10px; height: 30px; }
-.steam span:nth-child(4) { left: 14px; animation-delay: 0.6s; width: 9px; height: 28px; }
-.steam span:nth-child(5) { left: 28px; animation-delay: 1.3s; width: 11px; height: 32px; }
-
-@keyframes wave {
-  0%, 100% { height: 70%; }
-  50% { height: 74%; }
-}
-
-@keyframes steam-rise {
-  0% {
-    transform: translateY(0) scale(0.5);
-    opacity: 0;
-  }
-  30% {
-    opacity: 0.7;
-  }
-  100% {
-    transform: translateY(-110px) scale(1.3);
-    opacity: 0;
-  }
-}
-
-/* Текст */
-.welcome-title {
-  font-size: 36px;
-  font-weight: 700;
-  margin: 0 0 12px;
-  text-shadow: 0 2px 10px rgba(0,0,0,0.2);
-}
-
-.welcome-subtitle {
-  font-size: 18px;
-  opacity: 0.9;
-  margin-bottom: 40px;
-}
-
-/* Карточка пользователя */
-.user-card {
-  background: rgba(255,255,255,0.15);
-  backdrop-filter: blur(20px);
-  border-radius: 24px;
-  padding: 24px;
-  margin: 32px 0;
-  border: 1px solid rgba(255,255,255,0.2);
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-}
-
-.user-avatar-large {
-  width: 80px;
-  height: 80px;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 36px;
-  font-weight: bold;
-  color: white;
-  flex-shrink: 0;
-}
-
-.user-info {
-  text-align: left;
-  flex: 1;
-}
-
-.user-name {
-  font-size: 24px;
-  font-weight: 600;
-  margin: 0;
-}
-
-.user-username {
-  font-size: 16px;
-  opacity: 0.8;
-  margin: 4px 0 0;
-}
-
-/* Переключатель роли в Telegram */
-.role-switch {
-  display: flex;
-  gap: 16px;
-  margin: 40px 0 20px;
-  justify-content: center;
-}
-
-.role-btn {
-  padding: 16px 32px;
-  border: none;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  color: white;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  transition: all 0.3s ease;
-  min-width: 140px;
-  justify-content: center;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-}
-
-.role-btn:hover {
-  background: rgba(255, 255, 255, 0.25);
-  transform: translateY(-2px);
-}
-
-.role-btn.active {
-  background: rgba(255, 255, 255, 0.3);
-  box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
-  transform: translateY(-4px);
-}
-
-.role-btn i {
-  font-size: 20px;
-}
-
-/* Загрузка */
-.loading-status {
-  margin-top: 40px;
-}
-
-.loader {
-  width: 40px;
-  height: 40px;
-  border: 4px solid rgba(255,255,255,0.3);
-  border-top: 4px solid white;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin: 0 auto 20px;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.status-text {
-  font-size: 18px;
-  font-weight: 500;
-  opacity: 0.9;
-}
-
-/* Частицы */
-.particles {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.particles span {
-  position: absolute;
-  width: 6px;
-  height: 6px;
-  background: rgba(255,255,255,0.4);
-  border-radius: 50%;
-  animation: particle 15s linear infinite;
-}
-
-.particles span:nth-child(odd) {
-  background: rgba(255,255,255,0.6);
-}
-
-@keyframes particle {
-  0% { transform: translate(0, 100vh); opacity: 0; }
-  10% { opacity: 1; }
-  90% { opacity: 1; }
-  100% { transform: translate(var(--x, 0), -100px); opacity: 0; }
-}
-
-.particles span { --x: calc(10vw * var(--i) - 50vw); animation-delay: calc(0.8s * var(--i)); }
-
-/* === ОБЫЧНАЯ ФОРМА ЛОГИНА === */
+/* === КАРТОЧКА АВТОРИЗАЦИИ === */
 .auth-card {
   width: 100%;
   max-width: 440px;
@@ -612,6 +260,7 @@ onMounted(async () => {
   margin: 0;
 }
 
+/* === ПЕРЕКЛЮЧАТЕЛЬ КЛИЕНТ/БАРИСТА === */
 .user-type-toggle {
   display: flex;
   background: #f3f4f6;
@@ -661,6 +310,7 @@ onMounted(async () => {
   gap: 6px;
 }
 
+/* === ФОРМА === */
 .auth-form {
   display: flex;
   flex-direction: column;
@@ -746,6 +396,7 @@ onMounted(async () => {
   width: 100%;
 }
 
+/* === АЛЕРТЫ === */
 .alert-error {
   padding: 16px 20px;
   border-radius: 12px;
@@ -781,6 +432,7 @@ onMounted(async () => {
   margin-top: 2px;
 }
 
+/* === ФУТЕР === */
 .auth-footer {
   text-align: center;
   padding-top: 20px;
@@ -791,6 +443,16 @@ onMounted(async () => {
   justify-content: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.auth-link {
+  color: #6366f1;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.auth-link:hover {
+  text-decoration: underline;
 }
 
 .quick-switch {
@@ -813,6 +475,7 @@ onMounted(async () => {
   text-decoration: underline;
 }
 
+/* === АНИМАЦИИ === */
 .fade-enter-active, .fade-leave-active {
   transition: opacity 0.3s ease, transform 0.3s ease;
 }
