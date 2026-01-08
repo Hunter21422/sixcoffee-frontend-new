@@ -2,12 +2,12 @@
 
 import axios from "axios";
 
-// Базовый URL backend (берём из .env или дефолтный)
-const API_BASE = import.meta.env.VITE_API_URL || "https://backendcoffetogonew-1.onrender.com";
+// Базовый URL backend (из .env или дефолтный Render)
+const API_BASE = import.meta.env.VITE_API_URL || "https://backendloyalitysystem.onrender.com";
 
 // Основной экземпляр axios — БЕЗ /api/ в baseURL
 export const api = axios.create({
-  baseURL: API_BASE,  // ← здесь без /api/ — пути будут /me/, /telegram-auth/ и т.д.
+  baseURL: API_BASE,
   withCredentials: false,
   headers: {
     "Content-Type": "application/json",
@@ -129,7 +129,6 @@ export const updateUserProfile = (payload) => api.patch("/user/profile/", payloa
 export const getLoyaltyStatus = (username) =>
   api.get("/loyalty/status/", { params: { username } });
 
-// НОВЫЕ ФУНКЦИИ — именно их не хватало!
 export const getLoyaltyStatusByTelegram = async (username) => {
   try {
     const { data } = await api.get(`/loyalty/status-by-telegram/${username}/`);
