@@ -1,30 +1,34 @@
 // src/api.js — финальная версия для Telegram Mini App
+
 import axios from "axios";
 
-// Базовый URL backend (замени на свой, если нужно)
-const API_BASE = process.env.VUE_APP_API_BASE || "https://backendloyalitysystem.onrender.com";
+// Базовый URL backend (можно переопределить в .env)
+const API_BASE = import.meta.env.VITE_API_URL || "https://backendloyalitysystem.onrender.com";
 
-// Основной экземпляр axios — baseURL уже включает /api/
+// Основной экземпляр axios
 export const api = axios.create({
-  baseURL: `${API_BASE}/api/`,
+  baseURL: API_BASE,  // ← без /api/, если бэкенд не использует префикс (как в твоих urls.py)
   withCredentials: false,
+  headers: {
+    "Content-Type": "application/json",
+  },
 });
 
-// === Интерцептор запросов: добавляем Bearer токен + Telegram initData ===
+// === Интерцептор запросов: Bearer + Telegram initData ===
 api.interceptors.request.use((config) => {
-  // Пропускаем авторизацию для запросов с флагом __noAuth
+  // Пропуск авторизации для публичных запросов
   if (config.__noAuth) {
     delete config.headers.Authorization;
     return config;
   }
 
-  // Добавляем JWT токен
+  // JWT токен
   const token = localStorage.getItem("access");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
-  // Добавляем Telegram initData (если есть) — для валидации на backend
+  // Telegram initData (для валидации на бэкенде)
   const tgInitData = localStorage.getItem("tg_init_data");
   if (tgInitData) {
     config.headers["X-Telegram-Init-Data"] = tgInitData;
@@ -33,14 +37,12 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// === Интерцептор ответов: обновление токена при 401 ===
+// === Интерцептор ответов: рефреш токена при 401 ===
 let isRefreshing = false;
 let failedQueue = [];
 
 const processQueue = (error, token = null) => {
-  failedQueue.forEach((prom) => {
-    error ? prom.reject(error) : prom.resolve(token);
-  });
+  failedQueue.forEach((prom) => (error ? prom.reject(error) : prom.resolve(token)));
   failedQueue = [];
 };
 
@@ -65,7 +67,6 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       const refreshToken = localStorage.getItem("refresh");
-
       if (!refreshToken) {
         isRefreshing = false;
         processQueue(error, null);
@@ -74,16 +75,15 @@ api.interceptors.response.use(
       }
 
       try {
-        const { data } = await axios.post(`${API_BASE}/api/token/refresh/`, {
+        const { data } = await axios.post(`${API_BASE}/token/refresh/`, {
           refresh: refreshToken,
-        });
+        }, { __noAuth: true });
 
         localStorage.setItem("access", data.access);
         if (data.refresh) localStorage.setItem("refresh", data.refresh);
 
         processQueue(null, data.access);
         originalRequest.headers.Authorization = `Bearer ${data.access}`;
-
         return api(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
@@ -99,91 +99,105 @@ api.interceptors.response.use(
 );
 
 // ==========================
-// ===   АУТЕНТИФИКАЦИЯ   ===
+// === АУТЕНТИФИКАЦИЯ ===
 // ==========================
-
 export const loginJWT = (payload) =>
-  api.post("token/", payload, { __noAuth: true });
+  api.post("/token/", payload, { __noAuth: true });
 
 export const loginBaristaJWT = (payload) =>
-  api.post("barista/login-with-code/", payload, { __noAuth: true });
+  api.post("/barista/login-with-code/", payload, { __noAuth: true });
 
 export const loginBaristaOld = (payload) =>
-  api.post("barista/token/", payload, { __noAuth: true });
+  api.post("/barista/token/", payload, { __noAuth: true });
 
-export const getMe = () => api.get("me/");
-
-// Автоматическая аутентификация через Telegram (рекомендую добавить на backend)
 export const telegramAuth = () => {
   const initData = localStorage.getItem("tg_init_data");
   if (!initData) return Promise.reject("No Telegram initData");
-  return api.post("auth/telegram/", { init_data: initData }, { __noAuth: true });
+  return api.post("/telegram-auth/", { init_data: initData }, { __noAuth: true });
 };
 
-// ==========================
-// ===       ПРОФИЛЬ      ===
-// ==========================
-
-export const getUserProfile = () => api.get("user/profile/");
-export const updateUserProfile = (payload) => api.patch("user/profile/", payload);
+export const getMe = () => api.get("/me/");
 
 // ==========================
-// ===     ЛОЯЛЬНОСТЬ     ===
+// === ПРОФИЛЬ ===
 // ==========================
+export const getUserProfile = () => api.get("/user/profile/");
+export const updateUserProfile = (payload) => api.patch("/user/profile/", payload);
 
+// ==========================
+// === ЛОЯЛЬНОСТЬ ===
+// ==========================
 export const getLoyaltyStatus = (username) =>
-  api.get("loyalty/status/", { params: { username } });
+  api.get("/loyalty/status/", { params: { username } });
+
+// НОВЫЕ ФУНКЦИИ — именно их не хватало!
+export const getLoyaltyStatusByTelegram = async (username) => {
+  try {
+    const { data } = await api.get(`/loyalty/status-by-telegram/${username}/`);
+    return data;
+  } catch (error) {
+    throw error.response?.data?.detail || "Ошибка получения статуса";
+  }
+};
+
+export const addStampByTelegram = async ({ telegram_username, amount = 1 }) => {
+  try {
+    const { data } = await api.post("/loyalty/add-stamp-by-telegram/", {
+      telegram_username,
+      amount,
+    });
+    return data;
+  } catch (error) {
+    throw error.response?.data?.detail || "Ошибка начисления штампов";
+  }
+};
 
 export const addStampToUser = (payload) =>
-  api.post("loyalty/add-stamp/", payload);
+  api.post("/loyalty/add-stamp/", payload);
 
 export const generateLoyaltyCode = () =>
-  api.post("loyalty/generate-code/");
+  api.post("/loyalty/generate-code/");
 
 export const redeemLoyaltyCode = ({ code }) =>
-  api.post("loyalty/redeem-code/", { code });
+  api.post("/loyalty/redeem-code/", { code });
 
 export const checkLoyaltyCode = ({ code }) =>
-  api.post("loyalty/check-code/", { code });
+  api.post("/loyalty/check-code/", { code });
 
-export const resetLoyalty = () => api.post("loyalty/reset/");
+export const resetLoyalty = () => api.post("/loyalty/reset/");
 
 // ==========================
-// ===     РЕГИСТРАЦИЯ    ===
+// === РЕГИСТРАЦИЯ ===
 // ==========================
-
 export const registerUser = (payload) =>
-  api.post("register/", payload, { __noAuth: true });
+  api.post("/register/", payload, { __noAuth: true });
 
 export const registerBarista = (payload) =>
-  api.post("barista/register/", payload, { __noAuth: true });
+  api.post("/barista/register/", payload, { __noAuth: true });
 
 export const baristaVerifyCode = (payload) =>
-  api.post("barista/verify-code/", payload, { __noAuth: true });
+  api.post("/barista/verify-code/", payload, { __noAuth: true });
 
 // ==========================
-// ===     СМЕНА ПАРОЛЯ   ===
+// === СМЕНА ПАРОЛЯ ===
 // ==========================
-
 export const changePassword = (payload) =>
-  api.post("change_password/", payload);
+  api.post("/change_password/", payload);
 
 // ==========================
-// ===       ВЫХОД        ===
+// === ВЫХОД ===
 // ==========================
-
 export const logout = () => {
   localStorage.removeItem("access");
   localStorage.removeItem("refresh");
-  localStorage.removeItem("tg_init_data"); // Очищаем Telegram данные
+  localStorage.removeItem("tg_init_data");
   localStorage.removeItem("user_type");
   localStorage.removeItem("view_mode");
 
-  // Редирект на логин, если не там
   if (window.location.pathname !== "/login") {
     window.location.href = "/login";
   }
 };
 
-// Главный экспорт
+// Главный экспорт (axios instance)
 export default api;
