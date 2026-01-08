@@ -109,10 +109,19 @@ export const loginBaristaJWT = (payload) =>
 export const loginBaristaOld = (payload) =>
   api.post("/barista/token/", payload, { __noAuth: true });
 
-export const telegramAuth = () => {
+export const telegramAuth = async () => {
   const initData = localStorage.getItem("tg_init_data");
-  if (!initData) return Promise.reject("No Telegram initData");
-  return api.post("/telegram-auth/", { init_data: initData }, { __noAuth: true });
+  if (!initData) throw new Error("No Telegram initData");
+
+  try {
+    const res = await api.post("/telegram-auth/", { init_data: initData }, { __noAuth: true });
+    localStorage.setItem("access", res.data.access);
+    localStorage.setItem("refresh", res.data.refresh);
+    return res.data;
+  } catch (error) {
+    console.error("Telegram Auth Error:", error.response?.data);
+    throw error;
+  }
 };
 
 export const getMe = () => api.get("/me/");
@@ -120,7 +129,16 @@ export const getMe = () => api.get("/me/");
 // ==========================
 // === ПРОФИЛЬ ===
 // ==========================
-export const getUserProfile = () => api.get("/user/profile/");
+export const getUserProfile = async () => {
+  try {
+    const { data } = await api.get("/user/profile/");
+    return data;
+  } catch (error) {
+    console.error("Get Profile Error:", error.response?.status, error.response?.data);
+    throw error;
+  }
+};
+
 export const updateUserProfile = (payload) => api.patch("/user/profile/", payload);
 
 // ==========================
@@ -198,4 +216,3 @@ export const logout = () => {
 
 // Главный экспорт (axios instance)
 export default api;
-
