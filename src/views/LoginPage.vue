@@ -1,6 +1,5 @@
 <template>
   <div class="auth-container">
-    <!-- УБРАЛ ТЕЛЕГРАМ-ЭКРАН — ТЕПЕРЬ ВСЕГДА ОБЫЧНАЯ ФОРМА -->
     <div class="auth-card glass-card">
       <div class="auth-header">
         <div class="logo">
@@ -9,6 +8,15 @@
         </div>
         <h1 class="auth-title">Вход в систему</h1>
         <p class="auth-subtitle">Выберите тип входа</p>
+      </div>
+
+      <!-- КНОПКА ВОЙТИ ЧЕРЕЗ TELEGRAM — ТОЛЬКО В MINI APP -->
+      <div v-if="isTelegram" class="telegram-login-section">
+        <button class="btn-telegram" @click="telegramLogin" :disabled="loading">
+          <i class="icon-telegram"></i>
+          Войти через Telegram
+        </button>
+        <p class="telegram-hint">Быстрый вход без ввода пароля</p>
       </div>
 
       <div class="user-type-toggle">
@@ -37,7 +45,7 @@
           </div>
         </div>
 
-        <!-- ПЛАШКА ДЛЯ БАРИСТЫ — ПОЯВЛЯЕТСЯ ПРИ ПЕРЕКЛЮЧЕНИИ -->
+        <!-- Поле мастер-кода — только для барист -->
         <transition name="slide-fade">
           <div v-if="userType === 'barista'" class="form-group">
             <label class="form-label">Мастер-код сотрудника</label>
@@ -86,17 +94,16 @@
 </template>
 
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
-import { loginJWT, loginBaristaJWT, logout } from "@/api";
+import { loginJWT, loginBaristaJWT, telegramAuth, logout } from "@/api";
 import { ensureUser } from "@/stores/auth";
 import { useTelegram } from "@/composables/useTelegram";
 
 const router = useRouter();
+const { isTelegram } = useTelegram();
 
-const { isTelegram } = useTelegram();  // ← используем только для проверки, НЕ для авто-логина
-
-// ПЕРЕМЕННЫЕ ДЛЯ ФОРМЫ
+// Переменные формы
 const userType = ref("customer");
 const username = ref("");
 const password = ref("");
@@ -105,12 +112,11 @@ const loading = ref(false);
 const error = ref("");
 const isCodeError = ref(false);
 
-// КОМПУТИРОВАННЫЕ СВОЙСТВА
 const buttonText = computed(() => {
   return userType.value === "customer" ? "Войти в систему" : "Войти в панель баристы";
 });
 
-// МЕТОДЫ ПЕРЕКЛЮЧЕНИЯ
+// Переключение типа пользователя
 function setUserType(type) {
   userType.value = type;
   clearError();
@@ -126,7 +132,24 @@ function clearError() {
   isCodeError.value = false;
 }
 
-// ОСНОВНОЙ ЛОГИН (ТОЛЬКО РУЧНОЙ)
+// Вход через Telegram (кнопка)
+async function telegramLogin() {
+  loading.value = true;
+  error.value = "";
+
+  try {
+    await telegramAuth(); // Автоматический вход через Telegram
+    await ensureUser();   // Загрузка профиля
+    router.push("/loyalty"); // Редирект для клиента (можно изменить)
+  } catch (e) {
+    console.error("Telegram Login Error:", e);
+    error.value = "Ошибка входа через Telegram. Попробуйте позже.";
+  } finally {
+    loading.value = false;
+  }
+}
+
+// Обычный логин (логин/пароль + мастер-код)
 async function submitLogin() {
   clearError();
   loading.value = true;
@@ -135,12 +158,10 @@ async function submitLogin() {
     let response;
 
     if (userType.value === "customer") {
-      // Логин клиента
       response = await loginJWT({ username: username.value, password: password.value });
       localStorage.setItem("user_type", "customer");
-      router.push("/loyalty");  // ← редирект на лояльность
+      router.push("/loyalty");
     } else {
-      // Логин баристы
       if (!employeeCode.value.trim()) {
         error.value = "Введите мастер-код сотрудника";
         isCodeError.value = true;
@@ -154,56 +175,37 @@ async function submitLogin() {
         employee_code: employeeCode.value.trim(),
       });
       localStorage.setItem("user_type", "barista");
-      router.push("/barista");  // ← редирект на панель баристы
+      router.push("/barista");
     }
 
-    // СОХРАНЕНИЕ ТОКЕНОВ
     localStorage.setItem("access", response.data.access);
     if (response.data.refresh) localStorage.setItem("refresh", response.data.refresh);
 
-    // ОБНОВЛЕНИЕ ГЛОБАЛЬНОГО СОСТОЯНИЯ
     window.dispatchEvent(new CustomEvent("auth-changed"));
     await ensureUser();
 
-    // УСПЕШНЫЙ ЛОГИН — ПЕРЕХОД НА СТРАНИЦУ
-    console.log("Успешный логин, токен сохранён:", response.data.access);
-
+    console.log("Успешный ручной логин, токен:", response.data.access);
   } catch (e) {
-    console.error("Ошибка входа:", e);
+    console.error("Ошибка ручного входа:", e);
     const msg = e.response?.data?.error || e.response?.data?.detail || e.message || "Ошибка входа";
 
-    const lowerMsg = msg.toLowerCase();
-    if (
-      e.response?.status === 400 ||
-      e.response?.status === 403 ||
-      lowerMsg.includes("код") ||
-      lowerMsg.includes("code") ||
-      lowerMsg.includes("employee") ||
-      lowerMsg.includes("мастер")
-    ) {
+    if (msg.toLowerCase().includes("код") || msg.toLowerCase().includes("code")) {
       isCodeError.value = true;
-      error.value = "Неверный мастер-код сотрудника";
+      error.value = "Неверный мастер-код";
     } else {
-      error.value = msg.includes("Неверный") ? msg : "Неверный логин или пароль";
+      error.value = "Неверный логин или пароль";
     }
   } finally {
     loading.value = false;
   }
 }
 
-// МОНТИРОВАНИЕ — НИКАКОГО АВТО-ЛОГИНА
 onMounted(() => {
-  // Убираем любой автоматический логин
-  logout();  // ← очищаем localStorage при загрузке страницы
-
-  // Если в Telegram — показываем предупреждение
-  if (isTelegram.value) {
-    error.value = "В Telegram вход через логин/пароль. Используйте обычный браузер.";
-  }
+  // Очищаем старые токены при загрузке страницы
+  logout();
 });
 </script>
 
-<!-- СТИЛИ ОСТАЮТСЯ ТЕ ЖЕ — Я УБРАЛ ТОЛЬКО ТЕЛЕГРАМ-ЧАСТЬ -->
 <style scoped>
 /* === ОБЩИЙ КОНТЕЙНЕР === */
 .auth-container {
@@ -258,6 +260,46 @@ onMounted(() => {
   font-size: 16px;
   color: #6b7280;
   margin: 0;
+}
+
+/* === КНОПКА TELEGRAM === */
+.telegram-login-section {
+  margin-bottom: 32px;
+  text-align: center;
+}
+
+.btn-telegram {
+  padding: 16px 32px;
+  background: #0088cc;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 360px;
+  margin: 0 auto 16px;
+  transition: all 0.3s ease;
+}
+
+.btn-telegram:hover {
+  background: #006699;
+  transform: translateY(-2px);
+}
+
+.btn-telegram:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.telegram-hint {
+  font-size: 14px;
+  color: #6b7280;
 }
 
 /* === ПЕРЕКЛЮЧАТЕЛЬ КЛИЕНТ/БАРИСТА === */
@@ -508,6 +550,7 @@ onMounted(() => {
 .icon-lock::before { content: "🔒"; }
 .icon-error::before { content: "❌"; }
 .icon-warning::before { content: "⚠️"; }
+.icon-telegram::before { content: "📱"; }
 
 /* === ТЁМНАЯ ТЕМА === */
 @media (prefers-color-scheme: dark) {
