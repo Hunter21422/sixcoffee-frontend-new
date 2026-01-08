@@ -2,12 +2,12 @@
 
 import axios from "axios";
 
-// Базовый URL backend (можно переопределить в .env)
+// Базовый URL backend (берём из .env или дефолтный)
 const API_BASE = import.meta.env.VITE_API_URL || "https://backendcoffetogonew-1.onrender.com";
 
-// Основной экземпляр axios
+// Основной экземпляр axios — БЕЗ /api/ в baseURL
 export const api = axios.create({
-  baseURL: API_BASE,  // ← без /api/, если бэкенд не использует префикс (как в твоих urls.py)
+  baseURL: API_BASE,  // ← здесь без /api/ — пути будут /me/, /telegram-auth/ и т.д.
   withCredentials: false,
   headers: {
     "Content-Type": "application/json",
@@ -50,7 +50,6 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-
     if (error.response?.status === 401 && !originalRequest._retry) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
@@ -193,7 +192,6 @@ export const logout = () => {
   localStorage.removeItem("tg_init_data");
   localStorage.removeItem("user_type");
   localStorage.removeItem("view_mode");
-
   if (window.location.pathname !== "/login") {
     window.location.href = "/login";
   }
@@ -201,4 +199,3 @@ export const logout = () => {
 
 // Главный экспорт (axios instance)
 export default api;
-
