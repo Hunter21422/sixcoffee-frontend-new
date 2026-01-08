@@ -3,7 +3,7 @@
 import axios from "axios";
 
 // Базовый URL backend (можно переопределить в .env)
-const API_BASE = import.meta.env.VITE_API_URL || "https://backendloyalitysystem.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "https://backendcoffetogonew-1.onrender.com";
 
 // Основной экземпляр axios
 export const api = axios.create({
@@ -201,3 +201,4 @@ export const logout = () => {
 
 // Главный экспорт (axios instance)
 export default api;
+
