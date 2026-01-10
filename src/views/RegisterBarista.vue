@@ -74,21 +74,23 @@
             {{ error }}
           </div>
         </transition>
+      </form>
 
-        <!-- Ссылки в футере -->
-        <div class="auth-footer">
+      <!-- Ссылки в футере -->
+      <div class="auth-footer">
+        <div>
           <span>Обычный клиент?</span>
           <router-link to="/register" class="auth-link">
             Зарегистрироваться как клиент
           </router-link>
         </div>
-        <div class="auth-footer">
+        <div>
           <span>Уже есть аккаунт?</span>
           <router-link to="/login" class="auth-link">
             Войти
           </router-link>
         </div>
-      </form>
+      </div>
     </div>
   </div>
 </template>
@@ -96,7 +98,7 @@
 <script setup>
 import { ref } from "vue";
 import { useRouter } from "vue-router";
-import { registerBarista } from "@/api";
+import { registerBarista } from "@/api"; // ← функция из api.js
 import { useTelegram } from "@/composables/useTelegram";
 
 const router = useRouter();
@@ -119,12 +121,14 @@ async function submitRegister() {
       employee_code: employeeCode.value.trim(),
     };
 
-    const { data } = await registerBarista(payload);
+    const response = await registerBarista(payload);
 
-    // Сохраняем токены
-    localStorage.setItem("access", data.access);
-    if (data.refresh) {
-      localStorage.setItem("refresh", data.refresh);
+    // Сохраняем токены из ответа (если бэкенд их возвращает)
+    if (response.data.access) {
+      localStorage.setItem("access", response.data.access);
+    }
+    if (response.data.refresh) {
+      localStorage.setItem("refresh", response.data.refresh);
     }
 
     // Устанавливаем роль баристы
@@ -134,10 +138,16 @@ async function submitRegister() {
     await router.push("/barista");
   } catch (e) {
     console.error("Ошибка регистрации баристы:", e);
-    error.value =
-      e.response?.data?.error ||
-      e.response?.data?.detail ||
-      "Ошибка регистрации. Проверьте мастер-код или логин.";
+
+    // Обработка ошибок с бэкенда
+    const backendError = e.response?.data?.error || e.response?.data?.detail || e.message;
+    if (backendError?.includes("мастер-код") || backendError?.includes("code")) {
+      error.value = "Неверный мастер-код. Проверьте и попробуйте снова.";
+    } else if (backendError?.includes("логин") || backendError?.includes("username")) {
+      error.value = "Логин уже занят. Придумайте другой.";
+    } else {
+      error.value = backendError || "Ошибка регистрации. Попробуйте позже.";
+    }
   } finally {
     loading.value = false;
   }
@@ -354,10 +364,9 @@ async function submitRegister() {
   border-top: 1px solid #e5e7eb;
   color: #6b7280;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
 }
 
 .auth-link {
@@ -397,20 +406,15 @@ async function submitRegister() {
     background: rgba(17, 24, 39, 0.95);
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
-
   .auth-title { color: #f1f5f9; }
   .auth-subtitle { color: #94a3b8; }
-
   .form-input {
     background: rgba(30, 41, 59, 0.9);
     border-color: #475569;
     color: #f1f5f9;
   }
-
   .form-input:focus { background: rgba(30, 41, 59, 1); }
-
   .auth-footer { border-color: #475569; color: #94a3b8; }
-
   .alert-error {
     background: rgba(127, 29, 29, 0.3);
     border-color: #7f1d1d;
