@@ -79,7 +79,7 @@
 <script setup>
 import { ref } from "vue";
 import { useRouter } from "vue-router";
-import { registerUser } from "@/api"; // обычная регистрация клиента
+import { registerUser } from "@/api";
 
 const router = useRouter();
 
@@ -100,7 +100,9 @@ async function submitRegister() {
 
     const response = await registerUser(payload);
 
-    // Если бэкенд возвращает токены сразу после регистрации — сохраняем
+    console.log("Регистрация успешна:", response.data);
+
+    // Если бэкенд возвращает токены сразу — сохраняем
     if (response.data.access) {
       localStorage.setItem("access", response.data.access);
     }
@@ -108,17 +110,24 @@ async function submitRegister() {
       localStorage.setItem("refresh", response.data.refresh);
     }
 
-    // Успешно — редирект на логин или лояльность
-    await router.push("/login"); // или "/loyalty", если хочешь сразу в систему
+    // Успешно — редирект на логин (или на /loyalty, если хочешь сразу в систему)
+    await router.push("/login");
   } catch (e) {
     console.error("Ошибка регистрации:", e);
 
     // Красивые сообщения для пользователя
-    const backendError = e.response?.data?.error || e.response?.data?.detail || e.message;
-    if (backendError?.includes("логин") || backendError?.includes("username")) {
+    const backendError = e.response?.data?.error 
+      || e.response?.data?.detail 
+      || e.response?.data?.non_field_errors?.[0] 
+      || e.message 
+      || "Неизвестная ошибка";
+
+    if (backendError.toLowerCase().includes("логин") || backendError.toLowerCase().includes("username")) {
       error.value = "Логин уже занят. Придумайте другой.";
+    } else if (backendError.toLowerCase().includes("пароль") || backendError.toLowerCase().includes("password")) {
+      error.value = "Пароль слишком простой или короткий.";
     } else {
-      error.value = backendError || "Ошибка регистрации. Попробуйте позже.";
+      error.value = backendError;
     }
   } finally {
     loading.value = false;
