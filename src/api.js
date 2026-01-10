@@ -1,4 +1,4 @@
-// src/api.js — финальная версия для Telegram Mini App
+// src/api.js — финальная версия для Telegram Mini App (январь 2026)
 
 import axios from "axios";
 
@@ -50,6 +50,7 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+
     if (error.response?.status === 401 && !originalRequest._retry) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
@@ -115,11 +116,13 @@ export const telegramAuth = async () => {
 
   try {
     const res = await api.post("/telegram-auth/", { init_data: initData }, { __noAuth: true });
+    console.log("Telegram Auth Success:", res.data); // ← для отладки
+
     localStorage.setItem("access", res.data.access);
     localStorage.setItem("refresh", res.data.refresh);
     return res.data;
   } catch (error) {
-    console.error("Telegram Auth Error:", error.response?.data);
+    console.error("Telegram Auth Error:", error.response?.data || error.message);
     throw error;
   }
 };
@@ -185,11 +188,27 @@ export const resetLoyalty = () => api.post("/loyalty/reset/");
 // ==========================
 // === РЕГИСТРАЦИЯ ===
 // ==========================
-export const registerUser = (payload) =>
-  api.post("/register/", payload, { __noAuth: true });
+export const registerUser = async (payload) => {
+  try {
+    const res = await api.post("/register/", payload, { __noAuth: true });
+    console.log("Register User Success:", res.data);
+    return res.data;
+  } catch (error) {
+    console.error("Register User Error:", error.response?.data);
+    throw error;
+  }
+};
 
-export const registerBarista = (payload) =>
-  api.post("/barista/register/", payload, { __noAuth: true });
+export const registerBarista = async (payload) => {
+  try {
+    const res = await api.post("/barista/register/", payload, { __noAuth: true });
+    console.log("Register Barista Success:", res.data);
+    return res.data;
+  } catch (error) {
+    console.error("Register Barista Error:", error.response?.data);
+    throw error;
+  }
+};
 
 export const baristaVerifyCode = (payload) =>
   api.post("/barista/verify-code/", payload, { __noAuth: true });
