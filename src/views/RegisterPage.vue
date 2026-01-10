@@ -42,31 +42,36 @@
           </div>
         </div>
 
+        <!-- Кнопка регистрации -->
         <button type="submit" class="btn-primary btn-full" :disabled="loading">
           {{ loading ? "Регистрация…" : "Зарегистрироваться" }}
         </button>
 
-        <div v-if="error" class="alert alert-error">
-          <i class="icon-error"></i>
-          {{ error }}
-        </div>
+        <!-- Ошибка -->
+        <transition name="fade">
+          <div v-if="error" class="alert alert-error">
+            <i class="icon-error"></i>
+            {{ error }}
+          </div>
+        </transition>
+      </form>
 
-        <!-- Ссылка для баристы -->
-        <div class="auth-footer barista-link">
+      <!-- Ссылки в футере -->
+      <div class="auth-footer">
+        <div class="barista-link">
           <i class="icon-barista"></i>
           <span>Вы бариста или администратор?</span>
           <router-link to="/register-barista" class="auth-link">
             Тогда вам сюда →
           </router-link>
         </div>
-
-        <div class="auth-footer">
+        <div>
           <span>Уже есть аккаунт?</span>
           <router-link to="/login" class="auth-link">
             Войти
           </router-link>
         </div>
-      </form>
+      </div>
     </div>
   </div>
 </template>
@@ -74,7 +79,7 @@
 <script setup>
 import { ref } from "vue";
 import { useRouter } from "vue-router";
-import { registerUser } from "@/api";  // обычная регистрация
+import { registerUser } from "@/api"; // обычная регистрация клиента
 
 const router = useRouter();
 
@@ -88,18 +93,33 @@ async function submitRegister() {
   loading.value = true;
 
   try {
-    await registerUser({
-      username: username.value,
+    const payload = {
+      username: username.value.trim(),
       password: password.value,
-    });
+    };
 
-    // После успешной регистрации клиента — редирект на логин или лояльность
-    await router.push("/login");
+    const response = await registerUser(payload);
+
+    // Если бэкенд возвращает токены сразу после регистрации — сохраняем
+    if (response.data.access) {
+      localStorage.setItem("access", response.data.access);
+    }
+    if (response.data.refresh) {
+      localStorage.setItem("refresh", response.data.refresh);
+    }
+
+    // Успешно — редирект на логин или лояльность
+    await router.push("/login"); // или "/loyalty", если хочешь сразу в систему
   } catch (e) {
-    error.value =
-      e.response?.data?.error ||
-      e.response?.data?.detail ||
-      "Ошибка регистрации. Возможно, логин занят.";
+    console.error("Ошибка регистрации:", e);
+
+    // Красивые сообщения для пользователя
+    const backendError = e.response?.data?.error || e.response?.data?.detail || e.message;
+    if (backendError?.includes("логин") || backendError?.includes("username")) {
+      error.value = "Логин уже занят. Придумайте другой.";
+    } else {
+      error.value = backendError || "Ошибка регистрации. Попробуйте позже.";
+    }
   } finally {
     loading.value = false;
   }
@@ -128,7 +148,7 @@ async function submitRegister() {
   left: -50%;
   right: -50%;
   bottom: -50%;
-  background: 
+  background:
     radial-gradient(circle at 20% 80%, rgba(255,255,255,0.1) 0%, transparent 50%),
     radial-gradient(circle at 80% 20%, rgba(255,255,255,0.1) 0%, transparent 50%);
   animation: float 20s infinite linear;
@@ -238,77 +258,6 @@ async function submitRegister() {
   cursor: not-allowed;
 }
 
-/* Переключатель пароля */
-.password-toggle {
-  position: absolute;
-  right: 16px;
-  background: none;
-  border: none;
-  color: #9ca3af;
-  cursor: pointer;
-  padding: 4px;
-  transition: color 0.2s ease;
-}
-
-.password-toggle:hover {
-  color: #6366f1;
-}
-
-/* Чекбокс */
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  cursor: pointer;
-  user-select: none;
-}
-
-.checkbox {
-  display: none;
-}
-
-.checkmark {
-  width: 20px;
-  height: 20px;
-  border: 2px solid #d1d5db;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-}
-
-.checkbox:checked + .checkmark {
-  background: #6366f1;
-  border-color: #6366f1;
-}
-
-.checkbox:checked + .checkmark::after {
-  content: '✓';
-  color: white;
-  font-size: 14px;
-}
-
-.checkbox-text {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 500;
-  color: #374151;
-}
-
-/* Подсказка */
-.helper-text {
-  font-size: 14px;
-  color: #6b7280;
-  margin: 8px 0 0;
-  text-align: center;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-
 /* Кнопка */
 .btn-primary {
   padding: 18px 24px;
@@ -359,10 +308,9 @@ async function submitRegister() {
   border-top: 1px solid #e5e7eb;
   color: #6b7280;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 24px;
 }
 
 .auth-link {
@@ -414,20 +362,20 @@ async function submitRegister() {
     background: rgba(17, 24, 39, 0.95);
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
-  
   .auth-title { color: #f1f5f9; }
   .auth-subtitle { color: #94a3b8; }
-  
   .form-input {
     background: rgba(30, 41, 59, 0.9);
     border-color: #475569;
     color: #f1f5f9;
   }
-  
   .form-input:focus { background: rgba(30, 41, 59, 1); }
-  
-  .checkbox-text { color: #cbd5e1; }
   .auth-footer { border-color: #475569; color: #94a3b8; }
+  .alert-error {
+    background: rgba(127, 29, 29, 0.3);
+    border-color: #7f1d1d;
+    color: #fca5a5;
+  }
 }
 
 /* Адаптивность */
