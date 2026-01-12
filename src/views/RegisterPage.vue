@@ -119,6 +119,7 @@ async function submitRegister() {
     const backendError = e.response?.data?.error 
       || e.response?.data?.detail 
       || e.response?.data?.non_field_errors?.[0] 
+      || e.response?.statusText 
       || e.message 
       || "Неизвестная ошибка";
 
@@ -126,6 +127,10 @@ async function submitRegister() {
       error.value = "Логин уже занят. Придумайте другой.";
     } else if (backendError.toLowerCase().includes("пароль") || backendError.toLowerCase().includes("password")) {
       error.value = "Пароль слишком простой или короткий.";
+    } else if (e.response?.status === 500) {
+      error.value = "Внутренняя ошибка сервера. Попробуйте позже или свяжитесь с поддержкой.";
+    } else if (e.message.includes("Network") || e.message.includes("ERR")) {
+      error.value = "Сетевая ошибка. Проверьте интернет-соединение или попробуйте позже.";
     } else {
       error.value = backendError;
     }
